@@ -8,7 +8,12 @@ let cmdline_spec =
 ;;
 
 let process filename =
-    printf "Input filename is %s\n" filename
+    printf "Input filename is %s\n" filename;
+    Simple_type.print_stm Simple_type.test_prog;
+    print_newline ();
+    printf "max print: %d\n" (Simple_type.maxargs Simple_type.test_prog);
+    print_newline ();
+    Simple_type.interp Simple_type.test_prog
 ;;
 
 let command =

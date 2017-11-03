@@ -18,6 +18,3 @@ let mk startpos endpos =
 
 let mkloc item loc =
   { item; loc }
-
-let mkdummy item =
-{ item; loc = dummy }

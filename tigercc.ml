@@ -1,6 +1,4 @@
 open Core.Std
-open Location
-open Syntax
 
 (* command line spec *)
 let cmdline_spec =

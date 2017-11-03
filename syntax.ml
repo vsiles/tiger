@@ -14,28 +14,28 @@ type op =
 
 type tyfield = {
     field_name: Symbol.t Location.loc;
-    field_typ: Symbol.t Location.loc;
+    field_type: Symbol.t Location.loc;
 }
 
 type ty =
     | TyName of Symbol.t Location.loc
-    | TyStruct of tyfield list
+    | TyRecord of tyfield list
     | TyArray of Symbol.t Location.loc
 
 type exp =
     | Lvalue of lvalue Location.loc
     | Nil of unit Location.loc
-    | Unit of unit Location.loc
     | Seq of exp Location.loc list
     | Int of int Location.loc
     | String of string Location.loc
     | FunCall of Symbol.t Location.loc * exp Location.loc list
+    | UnaryMinus of exp Location.loc
     | BinOp of exp Location.loc * op Location.loc * exp Location.loc
     | Record of Symbol.t Location.loc * (Symbol.t Location.loc * exp Location.loc) list
     | Array of Symbol.t Location.loc * exp Location.loc * exp Location.loc
     | If of exp Location.loc * exp Location.loc * exp Location.loc option
     | While of exp Location.loc * exp Location.loc
-    | For of Symbol.t Location.loc * exp Location.loc * exp Location.loc *
+    | For of Symbol.t * exp Location.loc * exp Location.loc *
         exp Location.loc
     | Break of unit Location.loc
     | Assign of lvalue Location.loc * exp Location.loc
@@ -43,7 +43,7 @@ type exp =
 
 
 and lvalue =
-    | Id of Symbol.t Location.loc
+    | VarId of Symbol.t Location.loc
     | FieldAccess of lvalue Location.loc * Symbol.t Location.loc
     | ArrayAccess of lvalue Location.loc * exp Location.loc
 
@@ -56,7 +56,7 @@ and fundec = {
 
 and vardec = {
     var_name: Symbol.t Location.loc;
-    var_typ: Symbol.t Location.loc option;
+    var_type: Symbol.t Location.loc option;
     value: exp Location.loc;
 }
 

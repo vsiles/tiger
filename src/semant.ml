@@ -1,5 +1,5 @@
+open Core.Std
 open Errors
-open Printf
 
 module L = Location
 module TS = Tig_syntax
@@ -38,5 +38,5 @@ let transTy tenv = function
     | TS.TyName sl -> tenv_find sl tenv
     | TS.TyArray sl -> Types.Array (tenv_find sl tenv, Types.new_tag ())
     | TS.TyRecord l -> Types.Record (
-        List.map (fun f -> (f.TS.field_name.L.item, tenv_find f.TS.field_type tenv)) l,
+        List.map l (fun f -> (f.TS.field_name.L.item, tenv_find f.TS.field_type tenv)),
         Types.new_tag())

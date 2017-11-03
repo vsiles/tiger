@@ -1,4 +1,4 @@
-open Printf
+open Core.Std
 open Errors
 
 (*
@@ -51,8 +51,7 @@ let rec to_string = function
 and to_string_list = function
     | [] -> ""
     | (s, t) :: [] -> (Symbol.name s)^" : "^(to_string t)
-    | (s, t) :: tl -> List.fold_left
-        (fun str (s, t) -> str^"; "^(Symbol.name s)^" : "^(to_string t))
-        ((Symbol.name s)^" : "^(to_string t))
-        tl
+    | (s, t) :: tl -> List.fold_left tl
+        ~f:(fun str (s, t) -> str^"; "^(Symbol.name s)^" : "^(to_string t))
+        ~init:((Symbol.name s)^" : "^(to_string t))
 

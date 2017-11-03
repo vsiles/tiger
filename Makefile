@@ -20,18 +20,32 @@ else
     ECHO_OUTPUT :=
 endif
 
-all: tiger
+OCB_FLAGS := -use-ocamlfind
+OCB := ocamlbuild $(OCB_FLAGS)
 
-tiger:
-	@echo "  BUILDING " $(ECHO_OUTPUT)
-	$(Q)jbuilder build tigercc.exe $(ECHO_OUTPUT)
+all: native byte
+
+native: tiger.native
+
+byte: tiger.byte
+
+tiger.native:
+	@echo "  ML $< (native)" $(ECHO_OUTPUT)
+	$(Q)$(OCB) tigercc.native
+
+tiger.byte:
+	@echo "  ML $< (byte)" $(ECHO_OUTPUT)
+	$(Q)$(OCB) tigercc.byte
 
 clean:
-	@echo "  CLEANING " $(ECHO_OUTPUT)
-	$(Q)rm -rf _build
+	@echo "  CLEAN " $(ECHO_OUTPUT)
+	$(Q)$(OCB) -clean
 
-test: all
+debug:
+	$(OCB) -tag debug tigercc.byte
+
+test:
 	@echo "  TESTING " $(ECHO_OUTPUT)
-	$(Q)_build/default/tigercc.exe input.test
+	$(Q)./tigercc.native input.test
 
 .PHONY: test clean

@@ -26,3 +26,5 @@ let msg_of_error e loc msg =
     startpos.pos_lnum (startpos.pos_cnum - startpos.pos_bol)
     endpos.pos_lnum (endpos.pos_cnum - endpos.pos_bol)
     msg
+
+exception TypeError of string

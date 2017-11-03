@@ -20,7 +20,7 @@ else
     ECHO_OUTPUT :=
 endif
 
-OCB_FLAGS := -use-ocamlfind
+OCB_FLAGS := -use-ocamlfind -I src
 OCB := ocamlbuild $(OCB_FLAGS)
 
 all: native byte

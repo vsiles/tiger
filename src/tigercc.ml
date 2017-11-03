@@ -1,6 +1,7 @@
 open Core.Std
 open Errors
 open Types
+open Semant
 
 (* command line spec *)
 let cmdline_spec =

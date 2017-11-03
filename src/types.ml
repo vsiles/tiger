@@ -8,7 +8,7 @@ open Errors
  *)
 type tag = int
 
-let create =
+let new_tag =
   let n = ref (-1) in
   function () ->
     incr n;
@@ -35,7 +35,7 @@ let rec unroll = function
         let name = Symbol.name symbol in
         match !opt with
             | Some typ -> unroll typ
-            | None -> raise (TypeError  ("Mutual type failure (unroll): "^name))
+            | None -> type_error (Location.dummy) ("Mutual type failure (unroll): "^name)
     )
     | _ as foo -> foo
 

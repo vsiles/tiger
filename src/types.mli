@@ -1,6 +1,6 @@
 type tag
 
-val create : unit -> tag
+val new_tag : unit -> tag
 
 type t =
     | Int

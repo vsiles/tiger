@@ -87,6 +87,10 @@ lvalue :
     | var = loc(lvalue) Dot field = symbol {
         S.FieldAccess (var, field)
     }
+    | var = symbol LBracket subscript = loc(exp) RBracket {
+        (* Redundant but needed to solve a conflict *)
+        S.ArrayAccess ( L.mkloc (S.VarId var) var.L.loc, subscript)
+    }
     | var = loc(lvalue) LBracket subscript = loc(exp) RBracket {
         S.ArrayAccess (var, subscript)
     }

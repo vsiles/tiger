@@ -41,7 +41,7 @@ symbol :
 
 prog :
     | e = exp Eof { e }
-    | error { Error.syntax_error (L.mk $startpos $endpos) "" }
+    | error { Errors.syntax_error (L.mk $startpos $endpos) "" }
 
 exp :
     | var = loc(lvalue) { S.Lvalue var }

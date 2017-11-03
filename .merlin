@@ -1,4 +1,4 @@
-B _build
+B _build/src
 FLG -w -40
 PKG bigarray
 PKG bin_prot

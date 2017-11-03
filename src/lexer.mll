@@ -1,7 +1,7 @@
 {
   open Lexing
   open Parser
-  open Error
+  open Errors
   open Core.Std
 
   let special_char = function

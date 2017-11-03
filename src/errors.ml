@@ -4,7 +4,7 @@ type t =
   | LexingError
   | SyntaxError
 
-exception Error of t * Location.t * string
+exception TError of t * Location.t * string
 
 let name_of_error = function
   | LexingError -> "Lexing error"
@@ -12,7 +12,7 @@ let name_of_error = function
 ;;
 
 let raise_error err loc msg =
-  raise @@ Error (err, loc, msg)
+  raise @@ TError (err, loc, msg)
 
 let lexing_error = raise_error LexingError;;
 let syntax_error = raise_error SyntaxError;;

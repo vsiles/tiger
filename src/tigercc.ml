@@ -1,4 +1,5 @@
 open Core.Std
+open Errors
 
 (* command line spec *)
 let cmdline_spec =
@@ -8,7 +9,16 @@ let cmdline_spec =
 ;;
 
 let process filename =
-    printf "Input filename is %s\n" filename;
+    try
+        let inx = In_channel.create filename in
+        let lexbuf = Lexing.from_channel inx in
+        printf "Parsing: %s\n" filename;
+        let _ = Parser.prog Lexer.lexer lexbuf in
+        printf "> OK\n";
+        In_channel.close inx
+    with
+        | TError (e, l, m) -> printf "Error: %s\n" (msg_of_error e l m)
+        | Sys_error s -> printf "System Error: %s\n" s
 ;;
 
 let command =

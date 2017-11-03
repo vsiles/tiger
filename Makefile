@@ -23,11 +23,11 @@ endif
 OCB_FLAGS := -use-ocamlfind -I src
 OCB := ocamlbuild $(OCB_FLAGS)
 
+byte: tiger.byte
+
 all: native byte
 
 native: tiger.native
-
-byte: tiger.byte
 
 tiger.native:
 	@echo "  ML $< (native)" $(ECHO_OUTPUT)

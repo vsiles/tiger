@@ -13,7 +13,8 @@ let process filename =
         let inx = In_channel.create filename in
         let lexbuf = Lexing.from_channel inx in
         printf "Parsing: %s\n" filename;
-        let _ = Parser.prog Lexer.lexer lexbuf in
+        let raw_term = Parser.prog Lexer.lexer lexbuf in
+        let _ = Syntax.translate raw_term in
         printf "> OK\n";
         In_channel.close inx
     with

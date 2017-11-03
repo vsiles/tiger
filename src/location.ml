@@ -18,3 +18,11 @@ let mk startpos endpos =
 
 let mkloc item loc =
   { item; loc }
+
+let dummy_loc =
+    {   startpos = Lexing.dummy_pos;
+        endpos = Lexing.dummy_pos
+    }
+
+let mkdummy item =
+    { item; loc = dummy_loc }

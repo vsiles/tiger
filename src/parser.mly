@@ -1,6 +1,6 @@
 %{
   open Lexing
-  module S = Syntax 
+  module S = Tig_syntax 
   module L = Location
 %}
 
@@ -17,7 +17,7 @@
 %token <string> String
 %token <string> Id
 
-(* %right Function Type *)
+%right Function Type
 %nonassoc loop
 %right Else
 %nonassoc ColonEq
@@ -29,7 +29,7 @@
 %left Times Div
 %left UnaryMinus
 
-%start <Syntax.exp> prog
+%start <Tig_syntax.exp> prog
 
 %%
 
@@ -116,9 +116,9 @@ decs :
     | l = dec* { l }
 
 dec :
-    | t = loc(tydec) { S.TypeDec t }
+    | t = loc(tydec)+ { S.TypeDec t }
     | v = loc(vardec) { S.VarDec v }
-    | f = loc(fundec) { S.FunDec f }
+    | f = loc(fundec)+ { S.FunDec f }
 
 %inline tydec :
     | Type type_name = symbol Eq typ = ty { S.{ type_name; typ } }

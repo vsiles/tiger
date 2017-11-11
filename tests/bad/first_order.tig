@@ -1,0 +1,7 @@
+/* return a function */
+
+let
+    function id_int(x:int) =
+        x
+in
+    id_int

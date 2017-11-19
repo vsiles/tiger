@@ -1,5 +1,6 @@
 open Errors
 open Location
+open Core.Std
 
 type op =
     | Plus
@@ -28,9 +29,35 @@ let translate_op l = function
     | Tig_syntax.Or -> syntax_error l "Or must be translated to If/Then/Else"
 ;;
 
-type tyfield = Tig_syntax.tyfield
+type tyfield = {
+    field_name: Symbol.t Location.loc;
+    field_type: Symbol.t Location.loc;
+}
 
-type ty = Tig_syntax.ty
+let translate_field f = {
+  field_name = f.Tig_syntax.field_name;
+  field_type = f.Tig_syntax.field_type;
+  };;
+
+type ty =
+    | TyName of Symbol.t Location.loc
+    | TyRecord of tyfield list
+    | TyArray of Symbol.t Location.loc
+
+let field_cmp field1 field2 =
+  let name1 = field1.Tig_syntax.field_name in
+  let name2 = field2.Tig_syntax.field_name in
+  Pervasives.compare
+    (Symbol.name name1.Location.item)
+    (Symbol.name name2.Location.item)
+;;
+
+let translate_ty ty = match ty with
+  | Tig_syntax.TyName sl -> TyName sl
+  | Tig_syntax.TyRecord fields -> let sorted_list = (List.sort ~cmp:field_cmp fields)
+    in TyRecord (List.map ~f:translate_field sorted_list)
+  | Tig_syntax.TyArray sl -> TyArray sl
+;;
 
 type exp =
     | Lvalue of lvalue Location.loc
@@ -79,15 +106,19 @@ and dec =
   | VarDec of vardec Location.loc
   | TypeDec of typedec Location.loc list
 
+let translate_tydec tdec = {
+    type_name = tdec.Tig_syntax.type_name;
+    typ = translate_ty tdec.Tig_syntax.typ;
+  };;
 
 let rec translate = function
     | Tig_syntax.Lvalue vl -> Lvalue (mkloc (translate_lvalue vl.item) vl.loc)
     | Tig_syntax.Nil ul -> Nil ul
-    | Tig_syntax.Seq ell -> Seq (List.map (fun el -> mkloc (translate el.item) el.loc) ell)
+    | Tig_syntax.Seq ell -> Seq (List.map ell ~f:(fun el -> mkloc (translate el.item) el.loc))
     | Tig_syntax.Int il -> Int il
     | Tig_syntax.String sl -> String sl
     | Tig_syntax.FunCall (sl, ell) ->
-            FunCall (sl, List.map (fun el -> mkloc (translate el.item) el.loc) ell)
+            FunCall (sl, List.map ell ~f:(fun el -> mkloc (translate el.item) el.loc))
 
     | Tig_syntax.BinOp (el1, ol, el2) -> (
         let nel1 = mkloc (translate el1.item) el1.loc in
@@ -100,7 +131,7 @@ let rec translate = function
                 | _ -> BinOp (nel1, mkloc (translate_op ol.loc ol.item) ol.loc, nel2)
     )
     | Tig_syntax.Record (sl, slell) ->
-            Record (sl, List.map (fun (sl, el) -> (sl, mkloc (translate el.item) el.loc)) slell)
+            Record (sl, List.map slell ~f:(fun (sl, el) -> (sl, mkloc (translate el.item) el.loc)))
     | Tig_syntax.Array (sl, el1, el2) ->
             Array (sl, mkloc (translate el1.item) el1.loc, mkloc (translate el2.item) el2.loc)
     | Tig_syntax.If (el1, el2, elop) ->
@@ -115,7 +146,7 @@ let rec translate = function
     | Tig_syntax.Break ul -> Break ul
     | Tig_syntax.Assign (vl, el) -> Assign (mkloc (translate_lvalue vl.item) vl.loc,
         mkloc (translate el.item) el.loc)
-    | Tig_syntax.Let (dl, el) -> Let (List.map (fun d -> translate_dec d) dl,
+    | Tig_syntax.Let (dl, el) -> Let (List.map dl ~f:(fun d -> translate_dec d),
         mkloc (translate el.item) el.loc)
     | Tig_syntax.UnaryMinus el -> BinOp ((mkdummy (Int (mkdummy 0))), mkdummy Minus,
         mkloc (translate el.item) el.loc)
@@ -128,7 +159,7 @@ and translate_lvalue = function
 
 and translate_fundec fdec = {
     fun_name = fdec.Tig_syntax.fun_name;
-    args = fdec.Tig_syntax.args;
+    args = List.map ~f:translate_field fdec.Tig_syntax.args;
     return_type = fdec.Tig_syntax.return_type;
     body = mkloc (translate fdec.Tig_syntax.body.item) fdec.Tig_syntax.body.loc
 }
@@ -139,13 +170,8 @@ and translate_vardec vdec = {
     value = mkloc (translate vdec.Tig_syntax.value.item) vdec.Tig_syntax.value.loc
 }
 
-and translate_tydec tdec = {
-    type_name = tdec.Tig_syntax.type_name;
-    typ = tdec.Tig_syntax.typ
-}
-
 and translate_dec = function
-    | Tig_syntax.FunDec fll -> FunDec (List.map (fun fl -> mkloc (translate_fundec fl.item) fl.loc) fll)
+    | Tig_syntax.FunDec fll -> FunDec (List.map fll ~f:(fun fl -> mkloc (translate_fundec fl.item) fl.loc))
     | Tig_syntax.VarDec vl -> VarDec (mkloc (translate_vardec vl.item) vl.loc)
-    | Tig_syntax.TypeDec tll -> TypeDec (List.map (fun tl -> mkloc (translate_tydec tl.item) tl.loc) tll)
+    | Tig_syntax.TypeDec tll -> TypeDec (List.map tll (fun tl -> mkloc (translate_tydec tl.item) tl.loc))
 ;;

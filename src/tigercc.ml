@@ -16,8 +16,10 @@ let process filename =
         let lexbuf = Lexing.from_channel inx in
         printf "Parsing: %s\n" filename;
         let raw_term = Parser.prog Lexer.lexer lexbuf in
-        let _ = Syntax.translate raw_term in
+        let expr = Syntax.translate raw_term in
         printf "> OK\n";
+        let _ = Semant.transProg expr in
+        printf "> Type OK\n";
         In_channel.close inx
     with
         | TError (e, l, m) -> printf "Error: %s\n" (msg_of_error e l m)

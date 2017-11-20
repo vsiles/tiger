@@ -39,6 +39,7 @@ let translate_field f = {
   field_type = f.Tig_syntax.field_type;
   };;
 
+(* For TyRecord, tyfield list must be sorted by field name *)
 type ty =
     | TyName of Symbol.t Location.loc
     | TyRecord of tyfield list

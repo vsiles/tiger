@@ -1,0 +1,10 @@
+let
+    function f1(x : int) : int =
+        f2(x)
+
+    function f2(x : int) : int =
+        f1(x)
+
+in
+    f1 (0)
+end

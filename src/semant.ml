@@ -38,6 +38,17 @@ let transTy tenv = function
         Types.new_tag())
 ;;
 
+(* Helper function to extract type info for function signature *)
+let trans_fun_sig tenv lfundec =
+  let fundec = lfundec.L.item in
+  let argsty = List.map fundec.S.args
+    (fun field -> field.S.field_name, tenv_find field.S.field_type tenv) in
+  let retty = match fundec.S.return_type with
+    | None -> Types.Unit
+    | Some ret -> tenv_find ret tenv in
+  argsty, retty
+;;
+
 (* temp function *)
 let lift_ty ty = { exp = (); ty = ty };;
 
@@ -170,20 +181,25 @@ let rec transExp venv tenv exp =
             check_unit bodyl;
             lift_ty Types.Unit
         )
-        | S.For (_, froml, tol, bodyl) -> (
-            check_int froml;
-            check_int tol;
-            check_unit bodyl;
-            lift_ty Types.Unit
+        (* TODO: think of a way to prevent assignation to sym inside bodyl *)
+        | S.For (sym, froml, tol, bodyl) -> (
+            let venv' = Symbol.Table.add sym (Env.VarEntry Types.Int) venv in
+            let ty = (transExp  venv' tenv bodyl).ty in
+            if ty <> Types.Unit
+            then type_error exp.L.loc @@
+                sprintf "The body of a For loop must be of Unit type, found %s"
+                (Types.to_string ty)
+            else (check_int froml; check_int tol; lift_ty Types.Unit)
           )
         (* TODO: check that BREAK is inside a loop *)
         | S.Break _ -> lift_ty Types.Unit
         | S.Assign (vl, el) -> (
-            let vartyexp = trLValue vl in
-            let unrolled_type = Types.unroll vartyexp.ty in
+            let ret = lift_ty Types.Unit in
+            let varty = (trLValue vl).ty in
+            let unrolled_type = Types.unroll varty in
             match unrolled_type, el.L.item with
-                | Types.Record _, S.Nil _ -> vartyexp
-                | _, _ -> (check_ty vartyexp.ty el; vartyexp)
+                | Types.Record _, S.Nil _ -> ret
+                | _, _ -> (check_ty varty el; ret)
         )
         | S.Let (decl, el) ->
             let venv', tenv' = transDecs venv tenv decl in
@@ -253,9 +269,21 @@ and transDec venv tenv = function
       Symbol.Table.add var.S.var_name.L.item (Env.VarEntry tyexp.ty) venv, tenv
     )
   | S.FunDec funlist ->
+    (* gather the headers of each function *)
+    let venv' =
+        List.fold_left
+            funlist
+            ~f:(fun venv_acc lfundec -> let argsty,retty = trans_fun_sig tenv lfundec in
+                printf "Adding fun %s to env\n" (Symbol.name lfundec.L.item.S.fun_name.L.item);
+                Symbol.Table.add
+                    lfundec.L.item.S.fun_name.L.item
+                    (Env.FunEntry (List.map argsty snd, retty))
+                    venv_acc)
+            ~init:venv in
+    (* then parse each body with all headers in the environment *)
     List.fold_left funlist
       ~f:(fun venv_acc fundec -> trans_fun venv_acc tenv fundec)
-      ~init:venv, tenv
+      ~init:venv', tenv
   | S.TypeDec typlist ->
     venv, List.fold_left typlist
       ~f:(fun tenv_acc typdec -> trans_typ tenv_acc typdec)
@@ -267,28 +295,24 @@ and trans_typ tenv ltypdec =
   let typ = typdec.S.typ in
   Symbol.Table.add type_name.L.item (transTy tenv typ) tenv
 
+  (* TODO: optimize to avoid recomputing trans_fun_sig here *)
 and trans_fun venv tenv lfundec =
   let fundec = lfundec.L.item in
-  let argsty = List.map fundec.S.args
-    (fun field -> field.S.field_name, tenv_find field.S.field_type tenv) in
-  let retty = match fundec.S.return_type with
-    | None -> Types.Unit
-    | Some ret -> tenv_find ret tenv in
-  let fentry = Env.FunEntry (List.map argsty snd, retty) in
+  let argsty,retty = trans_fun_sig tenv lfundec in
   let venv' = List.fold_left argsty
       ~f:(fun venv_acc (name, ty) -> Symbol.Table.add name.L.item
              (Env.VarEntry ty) venv_acc)
       ~init:venv in
-  let venv'' = Symbol.Table.add fundec.S.fun_name.L.item fentry venv' in
-  let body_tyexp = transExp venv'' tenv fundec.S.body in
+  let body_tyexp = transExp venv' tenv fundec.S.body in
   if body_tyexp.ty <> retty then
       type_error lfundec.L.loc @@
       sprintf "The body of this function is of type %s, not %s"
         (Types.to_string body_tyexp.ty) (Types.to_string retty)
-  else venv''
+  else venv'
 ;;
 
 (* transProg: Syntax.exp -> unit *)
 let transProg exp =
   let lexp = L.mkdummy exp in
-  let _ = transExp Env.base_venv Env.base_tenv lexp in ()
+  let venv = Stdlib.init Env.base_venv in
+  let _ = transExp venv Env.base_tenv lexp in ()

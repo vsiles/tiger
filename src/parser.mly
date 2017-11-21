@@ -113,12 +113,12 @@ field_assign :
     | name = symbol Eq exp = loc(exp) { (name, exp) }
 
 decs :
-    | l = dec* { l }
+    | l = list(dec) { l }
 
 dec :
-    | t = loc(tydec)+ { S.TypeDec t }
+    | t = nonempty_list(loc(tydec)) { S.TypeDec t }
     | v = loc(vardec) { S.VarDec v }
-    | f = loc(fundec)+ { S.FunDec f }
+    | f = nonempty_list(loc(fundec)) { S.FunDec f }
 
 %inline tydec :
     | Type type_name = symbol Eq typ = ty { S.{ type_name; typ } }

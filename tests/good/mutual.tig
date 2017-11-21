@@ -1,9 +1,12 @@
 let
+    type t1 = { hd : int, tl : t2 }
+    type t2 = { hd : int, tl : t1 }
     function f1(x : int) : int =
         f2(x)
 
     function f2(x : int) : int =
         f1(x)
+
 
 in
     f1 (0)

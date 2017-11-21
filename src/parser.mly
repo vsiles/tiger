@@ -112,13 +112,31 @@ lvalue :
 field_assign :
     | name = symbol Eq exp = loc(exp) { (name, exp) }
 
-decs :
-    | l = list(dec) { l }
+(* Thanks to:
+ * - https://github.com/nojb/llvm-tiger/
+ * - https://stackoverflow.com/questions/47410781/how-to-parse-list-of-expression-using-menhir/
+ * for understanding how to parse the mutual function/type definitions
+ *)
+decs:
+  | hd = loc(vardec) tl = decs_vtf { (S.VarDec hd) :: tl }
+  | hd = nonempty_list(loc(tydec)) tl = decs_vf { (S.TypeDec hd) :: tl }
+  | hd = nonempty_list(loc(fundec)) tl = decs_vt { (S.FunDec hd) :: tl }
 
-dec :
-    | t = nonempty_list(loc(tydec)) { S.TypeDec t }
-    | v = loc(vardec) { S.VarDec v }
-    | f = nonempty_list(loc(fundec)) { S.FunDec f }
+decs_vtf:
+  | { [] }
+  | hd = loc(vardec) tl = decs_vtf { (S.VarDec hd) :: tl }
+  | hd = nonempty_list(loc(tydec)) tl = decs_vf { (S.TypeDec hd) :: tl }
+  | hd = nonempty_list(loc(fundec)) tl = decs_vt { (S.FunDec hd) :: tl }
+
+decs_vf:
+  | { [] }
+  | hd = loc(vardec) tl = decs_vtf { (S.VarDec hd) :: tl }
+  | hd = nonempty_list(loc(fundec)) tl = decs_vt { (S.FunDec hd) :: tl }
+
+decs_vt:
+  | { [] }
+  | hd = loc(vardec) tl = decs_vtf { (S.VarDec hd) :: tl }
+  | hd = nonempty_list(loc(tydec)) tl = decs_vf { (S.TypeDec hd) :: tl }
 
 %inline tydec :
     | Type type_name = symbol Eq typ = ty { S.{ type_name; typ } }

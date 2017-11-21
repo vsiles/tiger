@@ -1,0 +1,9 @@
+let
+type foo = { any : int }
+type bar = { any : int }
+function foo_eq_bar_nok (x: foo, y: bar): int =
+    if x = y then 0 else 1
+var x1 := foo { any = 3 }
+var x2 := bar { any = 3 }
+in foo_eq_bar_nok(x1, x2) 
+end

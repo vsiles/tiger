@@ -92,8 +92,51 @@ let rec transExp venv tenv exp =
                 sprintf "%s is a variable, expected a function" (Symbol.name sl.L.item)
             ) in (List.iter2_exn argsty ell check_ty; lift_ty retty)
         )
+        | S.BinOp (el1, opl, el2) -> (
+            let expty1 = trExp el1 in
+            let expty2 = trExp el2 in
+            match opl.L.item with
+            | S.Eq -> begin
+                (* first, check for nil vs nil *)
+                match el1.L.item, el2.L.item with
+                | S.Nil _, S.Nil _ ->
+                  type_error exp.L.loc
+                    "Spotted equality between two untyped 'nil', which is forbidden"
+                | _, S.Nil _ -> (match expty2.ty with
+                    | Types.Record _ -> lift_ty Types.Int (* bool is Types.Int *)
+                    | _ -> type_error exp.L.loc @@ sprintf
+                        "Equality between 'nil' and non record expression (of type %s)"
+                        (Types.to_string expty2.ty)
+                  )
+                | S.Nil _, _ -> (match expty1.ty with
+                    | Types.Record _ -> lift_ty Types.Int (* bool is Types.Int *)
+                    | _ -> type_error exp.L.loc @@ sprintf
+                        "Equality between 'nil' and non record expression (of type %s)"
+                        (Types.to_string expty1.ty)
+                  )
+                | _, _ -> if expty1.ty <> expty2.ty then
+                    type_error exp.L.loc @@ sprintf
+                      "Ill-typed equality test: %s vs %s"
+                      (Types.to_string expty1.ty) (Types.to_string expty2.ty)
+                  else lift_ty Types.Int
+              end
+            | _ -> (check_int el1; check_int el2; lift_ty Types.Int)
+          )
+(*
         (* FIXME handle comparison (a = b, a != b, a = nil, b != nil, nil = nil, nil != nil *)
-        | S.BinOp (el1, _, el2) -> (check_int el1; check_int el2; lift_ty Types.Int)
+type op =
+    | Plus
+    | Minus
+    | Times
+    | Div
+    | Eq
+    | Neq
+    | Lt
+    | Le
+    | Gt
+    | Ge
+
+           *)
         | S.Record (sl, fl) -> (
             (* sort field def to easily compare with sorted Record def *)
             let sorted_fl = List.sort ~cmp:field_loc_cmp fl in

@@ -42,6 +42,7 @@ clean:
 	$(Q)$(OCB) -clean
 
 debug:
+	@echo " ML $< (byte, debug)" $(ECHO_OUTPUT)
 	$(OCB) -tag debug tigercc.byte
 
 test:

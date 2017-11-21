@@ -47,6 +47,7 @@ debug:
 
 test:
 	@echo "  TESTING " $(ECHO_OUTPUT)
-	$(Q)./tigercc.native input.test
+	$(OCB) -package oUnit -tag debug -I tests test.byte
+	$(Q)./test.byte
 
 .PHONY: test clean

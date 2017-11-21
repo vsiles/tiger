@@ -274,7 +274,7 @@ and transDec venv tenv = function
         List.fold_left
             funlist
             ~f:(fun venv_acc lfundec -> let argsty,retty = trans_fun_sig tenv lfundec in
-                printf "Adding fun %s to env\n" (Symbol.name lfundec.L.item.S.fun_name.L.item);
+                (* printf "Adding fun %s to env\n" (Symbol.name lfundec.L.item.S.fun_name.L.item); *)
                 Symbol.Table.add
                     lfundec.L.item.S.fun_name.L.item
                     (Env.FunEntry (List.map argsty snd, retty))

@@ -1,0 +1,6 @@
+let type any = { any : int }
+
+var test_record_nil1 := nil
+
+in test_record_nil1 := any { any = 3 }
+end

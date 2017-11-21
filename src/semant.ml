@@ -178,11 +178,12 @@ let rec transExp venv tenv exp =
           )
         (* TODO: check that BREAK is inside a loop *)
         | S.Break _ -> lift_ty Types.Unit
-        (* FIXME: handle v := nil for record *)
         | S.Assign (vl, el) -> (
             let vartyexp = trLValue vl in
-            check_ty vartyexp.ty el;
-            vartyexp
+            let unrolled_type = Types.unroll vartyexp.ty in
+            match unrolled_type, el.L.item with
+                | Types.Record _, S.Nil _ -> vartyexp
+                | _, _ -> (check_ty vartyexp.ty el; vartyexp)
         )
         | S.Let (decl, el) ->
             let venv', tenv' = transDecs venv tenv decl in
@@ -234,12 +235,20 @@ and transDec venv tenv = function
       begin
         match var.S.var_type with
         | Some sl ->
-          let styp = tenv_find sl tenv (* might need unroll *) in
-          if styp <> tyexp.ty then
-            type_error vl.L.loc @@
-            sprintf "%s is incompatible with %s" (Types.to_string styp)
-              (Types.to_string tyexp.ty)
-        | None -> ()
+          let styp = Types.unroll (tenv_find sl tenv) in begin
+              match styp, var.S.value.L.item with
+              | Types.Record _, S.Nil _ -> () (* var a : foo := nil allowed if foo is a Record *)
+              | _ , _ -> if styp <> tyexp.ty then
+                  type_error vl.L.loc @@
+                  sprintf "%s is incompatible with %s"
+                  (Types.to_string styp) (Types.to_string tyexp.ty)
+          end
+        | None -> (* var a := nil is forbidden *) begin
+            match var.S.value.L.item with
+            | S.Nil _ -> type_error vl.L.loc
+                "Can't initialize a variable using 'nil' without an explicit type"
+            | _ -> ()
+        end
       end;
       Symbol.Table.add var.S.var_name.L.item (Env.VarEntry tyexp.ty) venv, tenv
     )

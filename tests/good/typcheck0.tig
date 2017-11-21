@@ -1,16 +1,28 @@
 let type any = { any : int }
+
+/* trivial test */
 function plus(x: int, y:int):int = x + y
 
+/* testing equality of record type against nil */
 function nil_r_ok (x:any, y:int, z:int): int =
     if x = nil then y else z
 
+/* testing equality of record type against nil */
 function nil_l_ok (x:any, y:int, z:int): int =
     if nil = x then y else z
-
+/* testing equality of record types */
 type foo = { any : int }
 function foo_eq_foo_ok (x: foo, y: foo): int =
     if x = y then 0 else 1
 var x1 := foo { any = 3 }
 var x2 := foo { any = 3 }
-in foo_eq_foo_ok(x1, x2) 
+
+/* testing initialization of record using nil */
+var test_record_nil1 : any := nil
+var test_record_nil2 := any { any = 3 }
+
+in (
+    test_record_nil2 := nil;
+    foo_eq_foo_ok(x1, x2)
+    )
 end

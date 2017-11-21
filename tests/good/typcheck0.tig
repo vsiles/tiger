@@ -1,3 +1,8 @@
-let function plus(x: int, y:int):int = x + y
+let type any = { any : int }
+function plus(x: int, y:int):int = x + y
+function nil_r_ok (x:any, y:int, z:int): int =
+    if x = nil then y else z
+function nil_l_ok (x:any, y:int, z:int): int =
+    if nil = x then y else z
 in plus(3, 4)
 end

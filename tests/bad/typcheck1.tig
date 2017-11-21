@@ -1,0 +1,5 @@
+let
+function nil_l_not_record_nok (x:string, y:int, z:int): int =
+    if nil = x then y else z
+in nil_l_not_record_nok("toto", 0, 0)
+end

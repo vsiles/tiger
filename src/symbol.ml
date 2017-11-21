@@ -15,6 +15,10 @@ let mk =
 let name (_, s) = s
 ;;
 
+let equal s1 s2 =
+  Pervasives.compare (fst s1) (fst s2) = 0
+;;
+
 module Ord = struct
     (* to avoid confusion an write type t = t *)
     type symbol = t

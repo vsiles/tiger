@@ -60,7 +60,7 @@ let field_loc_cmp field_def1 field_def2 =
 let rec transExp venv tenv exp =
     let rec check_ty ty exp =
         let ty' = (trExp exp).ty in
-        if not (phys_equal ty ty')
+        if ty <> ty'
         then
             type_error exp.L.loc @@
             sprintf "%s expected, found %s"
@@ -101,7 +101,7 @@ let rec transExp venv tenv exp =
             match recty with
             | Types.Record (fields, _) -> begin
                 List.iter2_exn fields sorted_fl (fun (fname, ftyp) (name, body) ->
-                    if phys_equal fname name.L.item then
+                    if Symbol.equal fname name.L.item then
                       check_ty ftyp body
                     else
                       name_error name.L.loc
@@ -118,7 +118,7 @@ let rec transExp venv tenv exp =
             let arrty = tenv_find sl tenv in
             begin match arrty with
               | Types.Array (ty, _) ->
-                if phys_equal init_tyexp.ty ty then lift_ty arrty
+                if init_tyexp.ty = ty then lift_ty arrty
                 else
                   type_error initl.L.loc @@
                   sprintf
@@ -207,7 +207,7 @@ and transDec venv tenv = function
         match var.S.var_type with
         | Some sl ->
           let styp = tenv_find sl tenv (* might need unroll *) in
-          if not (phys_equal styp tyexp.ty) then
+          if styp <> tyexp.ty then
             type_error vl.L.loc @@
             sprintf "%s is incompatible with %s" (Types.to_string styp)
               (Types.to_string tyexp.ty)
@@ -244,7 +244,7 @@ and trans_fun venv tenv lfundec =
       ~init:venv in
   let venv'' = Symbol.Table.add fundec.S.fun_name.L.item fentry venv' in
   let body_tyexp = transExp venv'' tenv fundec.S.body in
-  if not (phys_equal body_tyexp.ty retty) then
+  if body_tyexp.ty <> retty then
       type_error lfundec.L.loc @@
       sprintf "The body of this function is of type %s, not %s"
         (Types.to_string body_tyexp.ty) (Types.to_string retty)

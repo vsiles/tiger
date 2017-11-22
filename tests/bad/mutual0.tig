@@ -1,0 +1,7 @@
+let
+    type a = b
+    type b = c
+    type c = a
+in
+    3
+end

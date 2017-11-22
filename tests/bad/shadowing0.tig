@@ -1,0 +1,7 @@
+let
+    type a = { x : string }
+    type b = a
+    type a = { y : int }
+in 
+    3
+end

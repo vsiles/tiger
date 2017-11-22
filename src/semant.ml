@@ -3,6 +3,7 @@ open Errors
 
 module L = Location
 module S = Syntax
+module UF = Core_kernel.Union_find
 
 type venv = Env.entry Symbol.Table.t
 type tenv = Types.t Symbol.Table.t
@@ -63,6 +64,66 @@ let field_loc_cmp field_def1 field_def2 =
   Pervasives.compare
     (Symbol.name name1.L.item)
     (Symbol.name name2.L.item)
+;;
+
+(* Check if a list of mutual type declaration has invalid cycles.
+   Return true iff there is a cycle
+   Assumption: no shadowing/duplicates is allowed, otherwise a situation like
+
+   type toto = { ... }
+   type tata = toto
+   type toto = { ... toto ... }
+
+   is impossible to diagnostic correctly
+*)
+let check_typdec_cycle ltypdec_list =
+  let rec check_typdec_cycle_gen id ufs = function
+    | ltypdec :: tl -> begin
+        let typdec = ltypdec.L.item in
+        let left = typdec.S.type_name.L.item in
+        let typ = typdec.S.typ in
+        match typ with
+        | S.TyName lname -> let right = lname.L.item in
+          let left_id, id, ufs =
+            match Symbol.Table.find ufs left with
+            | Some uf -> uf, id, ufs
+            | None -> let new_uf = UF.create id in
+              new_uf, id + 1, Symbol.Table.add ufs ~key:left ~data:new_uf
+          in
+          let right_id, id, ufs =
+            match Symbol.Table.find ufs right with
+            | Some uf -> uf, id, ufs
+            | None -> let new_uf = UF.create id in
+              new_uf, id + 1, Symbol.Table.add ufs ~key:right ~data:new_uf
+          in
+          if UF.same_class left_id right_id then
+            (* Spotted a cycle *) true
+          else (
+            UF.union left_id right_id;
+            check_typdec_cycle_gen id ufs tl
+          )
+        | _ -> let ufs = Symbol.Table.add ufs ~key:left ~data:(UF.create id) in
+          check_typdec_cycle_gen (id + 1) ufs tl
+      end
+    | [] -> false
+  in check_typdec_cycle_gen 0 Symbol.Table.empty ltypdec_list
+;;
+
+(* Check if a list of mutual type declaration has dups (a.k.a. shadowing)
+   Return true if dups are spotted
+*)
+let check_typdec_shadowing ltypdec_list =
+  let rec check_typdec_shadowing_gen = function
+    | ltypdec :: tl -> begin
+        let typdec = ltypdec.L.item in
+        let type_name = typdec.S.type_name.L.item in
+        if List.exists tl
+          ~f:(fun x -> Symbol.equal type_name x.L.item.S.type_name.L.item)
+        then true
+        else check_typdec_shadowing_gen tl
+      end
+    | [] -> false
+  in check_typdec_shadowing_gen ltypdec_list
 ;;
 
 (* TODO improve error message here,
@@ -287,6 +348,11 @@ and transDec venv tenv = function
       ~f:(fun venv_acc fundec -> trans_fun venv_acc tenv fundec)
       ~init:venv', tenv
   | S.TypeDec typlist ->
+    let dummy_loc = match typlist with | hd :: _ -> hd.L.loc | [] -> L.dummy_loc in
+    if check_typdec_shadowing typlist
+    then type_error dummy_loc "Shadowing detected in mutual type definition";
+    if check_typdec_cycle typlist
+    then type_error dummy_loc "Cycle detected in mutual type definition";
     (* gather the headers of each type *)
     let _ = printf "Parsing TypeDec block\n" in
     let tenv' =

@@ -38,6 +38,7 @@ let rec unroll = function
             | None -> type_error (Location.dummy) ("Mutual type failure (unroll): "^name)
     )
     | _ as foo -> foo
+;;
 
 let rec to_string = function
     | Int -> "int"
@@ -46,7 +47,11 @@ let rec to_string = function
     | Array (t, n) -> sprintf "Array %s %d" (to_string t) n
     | Nil -> "nil"
     | Unit -> "unit"
-    | Name (sym, _) -> Symbol.name sym
+    | Name (sym, optty_ref) -> begin
+        match !optty_ref with
+        | Some _ -> sprintf "%s (Some)" (Symbol.name sym)
+        | None -> sprintf "%s (None)" (Symbol.name sym)
+      end
 
 and to_string_list = function
     | [] -> ""
@@ -54,4 +59,4 @@ and to_string_list = function
     | (s, t) :: tl -> List.fold_left tl
         ~f:(fun str (s, t) -> str^"; "^(Symbol.name s)^" : "^(to_string t))
         ~init:((Symbol.name s)^" : "^(to_string t))
-
+;;

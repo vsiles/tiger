@@ -11,7 +11,7 @@ type tenv = Types.t Symbol.Table.t
 let env_find env_name sym env =
   match Symbol.Table.find env sym.L.item with
   | Some x -> x
-  | None -> 
+  | None ->
     name_error sym.L.loc @@
     sprintf "Unknown %s: %s"
       env_name
@@ -126,17 +126,41 @@ let check_typdec_shadowing ltypdec_list =
   in check_typdec_shadowing_gen ltypdec_list
 ;;
 
+(* Replace remaining Types.Name (_, !None) with relevant !Some *)
+let fix_name_ty tenv =
+  let rec fix ty = match ty with
+    | Types.Name (sym, opty_ref) -> begin
+        match !opty_ref with
+        | Some _ -> ()
+        | None -> opty_ref := Some (tenv_find (L.mkdummy sym) tenv)
+      end
+    | Types.Array (arrty, _) -> fix arrty
+    | Types.Record (fields, _) ->
+      List.iter fields ~f:(fun (_, t) -> fix t)
+    | _ -> ()
+  in (
+    Symbol.Table.iteri tenv (fun ~key ~data -> fix data);
+    tenv
+  )
+;;
+
 (* TODO improve error message here,
    might remove some calls to check_* to have more precise log *)
 (* transExp: venv -> tenv -> S.exp -> expty *)
+(* Note: tenv must not have Types.Name(None) entries *)
 let rec transExp venv tenv exp =
-    let rec check_ty ty exp =
-        let ty' = (trExp exp).ty in
-        if ty <> ty'
-        then
-            type_error exp.L.loc @@
-            sprintf "%s expected, found %s"
-                    (Types.to_string ty) (Types.to_string ty')
+  let rec check_ty ty exp =
+    let ty' = (trExp exp).ty in
+    let ty1 = Types.unroll ty in
+    let ty2 = Types.unroll ty' in
+    match ty1, ty2 with
+    | Types.Nil, Types.Record _ -> ()
+    | Types.Record _, Types.Nil -> ()
+    | _, _ ->
+      if not @@ phys_equal ty1 ty2
+      then type_error exp.L.loc @@
+        sprintf "%s expected, found %s"
+          (Types.to_string ty) (Types.to_string ty')
 
     and check_int exp = check_ty Types.Int exp
 
@@ -144,7 +168,7 @@ let rec transExp venv tenv exp =
 
     and trExp exp = match exp.L.item with
         | S.Lvalue vl -> trLValue vl
-        | S.Nil _ -> lift_ty Types.Unit
+        | S.Nil _ -> lift_ty Types.Nil
         (*
             - type of a sequence is the type of the last entry.
             - all entries must typecheck
@@ -299,12 +323,14 @@ let rec transExp venv tenv exp =
     )
 in trExp exp
 
+(* transDecs: venv -> tenv -> S.dec list -> (venv * tenv) *)
+(* Note: tenv must not have Types.Name(None) entries, neither I/O *)
 and transDecs venv tenv =
   List.fold_left ~f:(fun (venv', tenv') dec -> transDec venv' tenv' dec)
     ~init:(venv, tenv)
 
-(* /!\ First attempt, don't support mutual types/functions *)
 (* transDec: venv -> tenv -> S.dec -> (venv * tenv) *)
+(* Note: tenv must not have Types.Name(None) entries, neither I/O *)
 and transDec venv tenv = function
   | S.VarDec vl -> (
       let var = vl.L.item in
@@ -331,14 +357,12 @@ and transDec venv tenv = function
     )
   | S.FunDec funlist ->
     (* gather the headers of each function *)
-    let _ = printf "Parsing FunDec block\n" in
     let venv' =
       List.fold_left
         funlist
         ~f:(fun venv_acc lfundec ->
             let fundec = lfundec.L.item in
             let argsty,retty = trans_fun_sig tenv lfundec in
-            printf "Adding fun %s to env\n" (Symbol.name fundec.S.fun_name.L.item);
             Symbol.Table.add venv_acc
               ~key:fundec.S.fun_name.L.item
               ~data:(Env.FunEntry (List.map argsty snd, retty)))
@@ -353,21 +377,21 @@ and transDec venv tenv = function
     then type_error dummy_loc "Shadowing detected in mutual type definition";
     if check_typdec_cycle typlist
     then type_error dummy_loc "Cycle detected in mutual type definition";
-    (* gather the headers of each type *)
-    let _ = printf "Parsing TypeDec block\n" in
+    (* gather the headers of each type, introducing temporary Types.Name(None) *)
     let tenv' =
       List.fold_left
         typlist
         ~f:(fun tenv_acc ltypdec ->
             let typdec = ltypdec.L.item in
             let header = Types.Name (typdec.S.type_name.L.item, ref None) in
-            printf "Adding type %s to env\n" (Symbol.name typdec.S.type_name.L.item);
             Symbol.Table.add tenv_acc ~key:typdec.S.type_name.L.item ~data:header)
         ~init:tenv in
     (* the parse each type with all headers in the environment *)
-    venv, List.fold_left typlist
+    let tenv'' = List.fold_left typlist
       ~f:(fun tenv_acc typdec -> trans_typ tenv_acc typdec)
-      ~init:tenv'
+      ~init:tenv' in
+    (* now update the Types.Name(None) -> Types.Name(Some) that this function introduced *)
+    venv, fix_name_ty tenv''
 
 and trans_typ tenv ltypdec =
   let typdec = ltypdec.L.item in
@@ -384,7 +408,7 @@ and trans_fun venv tenv lfundec =
              ~key:name.L.item ~data:(Env.VarEntry ty))
       ~init:venv in
   let body_tyexp = transExp venv' tenv fundec.S.body in
-  if body_tyexp.ty <> retty then
+  if not @@ phys_equal body_tyexp.ty retty then
       type_error lfundec.L.loc @@
       sprintf "The body of this function is of type %s, not %s"
         (Types.to_string body_tyexp.ty) (Types.to_string retty)

@@ -45,6 +45,7 @@ let stdlib_funs = [
 ;;
 
 let init env = List.fold_left stdlib_funs
-    ~f:(fun acc (fname, fentry) -> Symbol.Table.add (Symbol.mk fname) fentry acc)
+    ~f:(fun acc (fname, fentry) ->
+        Symbol.Table.add acc ~key:(Symbol.mk fname) ~data:fentry)
     ~init:env
 ;;

@@ -8,10 +8,9 @@ type venv = Env.entry Symbol.Table.t
 type tenv = Types.t Symbol.Table.t
 
 let env_find env_name sym env =
-  try
-    Symbol.Table.find sym.L.item env
-  with
-    Not_found ->
+  match Symbol.Table.find env sym.L.item with
+  | Some x -> x
+  | None -> 
     name_error sym.L.loc @@
     sprintf "Unknown %s: %s"
       env_name
@@ -184,7 +183,7 @@ let rec transExp venv tenv exp =
         )
         (* TODO: think of a way to prevent assignation to sym inside bodyl *)
         | S.For (sym, froml, tol, bodyl) -> (
-            let venv' = Symbol.Table.add sym (Env.VarEntry Types.Int) venv in
+            let venv' = Symbol.Table.add venv ~key:sym ~data:(Env.VarEntry Types.Int)  in
             let ty = (transExp  venv' tenv bodyl).ty in
             if ty <> Types.Unit
             then type_error exp.L.loc @@
@@ -267,7 +266,7 @@ and transDec venv tenv = function
             | _ -> ()
         end
       end;
-      Symbol.Table.add var.S.var_name.L.item (Env.VarEntry tyexp.ty) venv, tenv
+      Symbol.Table.add venv ~key:var.S.var_name.L.item ~data:(Env.VarEntry tyexp.ty), tenv
     )
   | S.FunDec funlist ->
     (* gather the headers of each function *)
@@ -279,10 +278,9 @@ and transDec venv tenv = function
             let fundec = lfundec.L.item in
             let argsty,retty = trans_fun_sig tenv lfundec in
             printf "Adding fun %s to env\n" (Symbol.name fundec.S.fun_name.L.item);
-            Symbol.Table.add
-              fundec.S.fun_name.L.item
-              (Env.FunEntry (List.map argsty snd, retty))
-              venv_acc)
+            Symbol.Table.add venv_acc
+              ~key:fundec.S.fun_name.L.item
+              ~data:(Env.FunEntry (List.map argsty snd, retty)))
         ~init:venv in
     (* then parse each body with all headers in the environment *)
     List.fold_left funlist
@@ -298,7 +296,7 @@ and transDec venv tenv = function
             let typdec = ltypdec.L.item in
             let header = Types.Name (typdec.S.type_name.L.item, ref None) in
             printf "Adding type %s to env\n" (Symbol.name typdec.S.type_name.L.item);
-            Symbol.Table.add typdec.S.type_name.L.item header tenv_acc)
+            Symbol.Table.add tenv_acc ~key:typdec.S.type_name.L.item ~data:header)
         ~init:tenv in
     (* the parse each type with all headers in the environment *)
     venv, List.fold_left typlist
@@ -309,15 +307,15 @@ and trans_typ tenv ltypdec =
   let typdec = ltypdec.L.item in
   let type_name = typdec.S.type_name in
   let typ = typdec.S.typ in
-  Symbol.Table.add type_name.L.item (transTy tenv typ) tenv
+  Symbol.Table.add tenv ~key:type_name.L.item ~data:(transTy tenv typ)
 
   (* TODO: optimize to avoid recomputing trans_fun_sig here *)
 and trans_fun venv tenv lfundec =
   let fundec = lfundec.L.item in
   let argsty,retty = trans_fun_sig tenv lfundec in
   let venv' = List.fold_left argsty
-      ~f:(fun venv_acc (name, ty) -> Symbol.Table.add name.L.item
-             (Env.VarEntry ty) venv_acc)
+      ~f:(fun venv_acc (name, ty) -> Symbol.Table.add venv_acc
+             ~key:name.L.item ~data:(Env.VarEntry ty))
       ~init:venv in
   let body_tyexp = transExp venv' tenv fundec.S.body in
   if body_tyexp.ty <> retty then

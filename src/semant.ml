@@ -28,7 +28,8 @@ type expty = {exp: Translate.exp; ty: Types.t}
 
 (*
     transTy: tenv -> S.ty -> Types.t
-    Might return Types.Name
+    Must not go under Types.Name in order to be able
+    to deal with mutual recursive types
 *)
 let transTy tenv = function
     | S.TyName sl -> tenv_find sl tenv
@@ -270,24 +271,39 @@ and transDec venv tenv = function
     )
   | S.FunDec funlist ->
     (* gather the headers of each function *)
+    let _ = printf "Parsing FunDec block\n" in
     let venv' =
-        List.fold_left
-            funlist
-            ~f:(fun venv_acc lfundec -> let argsty,retty = trans_fun_sig tenv lfundec in
-                (* printf "Adding fun %s to env\n" (Symbol.name lfundec.L.item.S.fun_name.L.item); *)
-                Symbol.Table.add
-                    lfundec.L.item.S.fun_name.L.item
-                    (Env.FunEntry (List.map argsty snd, retty))
-                    venv_acc)
-            ~init:venv in
+      List.fold_left
+        funlist
+        ~f:(fun venv_acc lfundec ->
+            let fundec = lfundec.L.item in
+            let argsty,retty = trans_fun_sig tenv lfundec in
+            printf "Adding fun %s to env\n" (Symbol.name fundec.S.fun_name.L.item);
+            Symbol.Table.add
+              fundec.S.fun_name.L.item
+              (Env.FunEntry (List.map argsty snd, retty))
+              venv_acc)
+        ~init:venv in
     (* then parse each body with all headers in the environment *)
     List.fold_left funlist
       ~f:(fun venv_acc fundec -> trans_fun venv_acc tenv fundec)
       ~init:venv', tenv
   | S.TypeDec typlist ->
+    (* gather the headers of each type *)
+    let _ = printf "Parsing TypeDec block\n" in
+    let tenv' =
+      List.fold_left
+        typlist
+        ~f:(fun tenv_acc ltypdec ->
+            let typdec = ltypdec.L.item in
+            let header = Types.Name (typdec.S.type_name.L.item, ref None) in
+            printf "Adding type %s to env\n" (Symbol.name typdec.S.type_name.L.item);
+            Symbol.Table.add typdec.S.type_name.L.item header tenv_acc)
+        ~init:tenv in
+    (* the parse each type with all headers in the environment *)
     venv, List.fold_left typlist
       ~f:(fun tenv_acc typdec -> trans_typ tenv_acc typdec)
-      ~init:tenv
+      ~init:tenv'
 
 and trans_typ tenv ltypdec =
   let typdec = ltypdec.L.item in

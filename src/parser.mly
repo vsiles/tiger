@@ -17,7 +17,6 @@
 %token <string> String
 %token <string> Id
 
-%right Function Type
 %nonassoc loop
 %right Else
 %nonassoc ColonEq

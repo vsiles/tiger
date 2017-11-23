@@ -1,0 +1,3 @@
+let var N := 8 in
+(for i := 0 to N - 1 do print("\n")) = (for i := 0 to N - 1 do print("\n"))
+end

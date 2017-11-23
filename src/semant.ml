@@ -346,19 +346,24 @@ and transDec venv tenv = function
     )
   | S.FunDec funlist ->
     (* gather the headers of each function *)
-    let venv' =
-      List.fold_left
+    let fun_and_header_list =
+      List.fold_right
         funlist
-        ~f:(fun venv_acc lfundec ->
-            let fundec = lfundec.L.item in
+        ~f:(fun lfundec acc ->
             let argsty,retty = trans_fun_sig tenv lfundec in
-            Symbol.Table.add venv_acc
-              ~key:fundec.S.fun_name.L.item
+            (lfundec, (argsty, retty)) :: acc)
+        ~init:[] in
+    (* update the venv with FunEntry for each function *)
+    let venv' = List.fold_left
+        fun_and_header_list
+        ~f:(fun acc (lfundec, (argsty, retty)) ->
+            Symbol.Table.add acc
+              ~key:lfundec.L.item.S.fun_name.L.item
               ~data:(Env.FunEntry (List.map argsty snd, retty)))
         ~init:venv in
     (* then parse each body with all headers in the environment *)
-    List.fold_left funlist
-      ~f:(fun venv_acc fundec -> trans_fun venv_acc tenv fundec)
+    List.fold_left fun_and_header_list
+      ~f:(fun venv_acc fundec_and_header -> trans_fun venv_acc tenv fundec_and_header)
       ~init:venv', tenv
   | S.TypeDec typlist ->
     let dummy_loc = match typlist with | hd :: _ -> hd.L.loc | [] -> L.dummy_loc in
@@ -388,10 +393,8 @@ and trans_typ tenv ltypdec =
   let typ = typdec.S.typ in
   Symbol.Table.add tenv ~key:type_name.L.item ~data:(transTy tenv typ)
 
-  (* TODO: optimize to avoid recomputing trans_fun_sig here *)
-and trans_fun venv tenv lfundec =
+and trans_fun venv tenv (lfundec, (argsty, retty)) =
   let fundec = lfundec.L.item in
-  let argsty,retty = trans_fun_sig tenv lfundec in
   let venv' = List.fold_left argsty
       ~f:(fun venv_acc (name, ty) -> Symbol.Table.add venv_acc
              ~key:name.L.item ~data:(Env.VarEntry ty))

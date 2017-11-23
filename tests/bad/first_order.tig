@@ -1,7 +1,8 @@
 /* return a function */
 
 let
-    function id_int(x:int) =
+    function id_int(x:int) :int  =
         x
 in
     id_int
+end

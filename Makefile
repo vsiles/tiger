@@ -43,11 +43,11 @@ clean:
 
 debug:
 	@echo " ML $< (byte, debug)" $(ECHO_OUTPUT)
-	$(OCB) -tag debug tigercc.byte
+	$(Q)$(OCB) -tag debug tigercc.byte
 
 test:
 	@echo "  TESTING " $(ECHO_OUTPUT)
-	$(OCB) -package oUnit -tag debug -I tests test.byte
+	$(Q)$(OCB) -package oUnit -tag debug -I tests test.byte
 	$(Q)./test.byte
 
 .PHONY: test clean

@@ -161,7 +161,7 @@ let rec transExp venv tenv exp =
     and check_unit exp = check_ty Types.Unit exp
 
     and trExp exp = match exp.L.item with
-        | S.Lvalue vl -> trLValue vl
+        | S.Lvalue vl -> fst @@ trLValue vl
         | S.Nil _ -> lift_ty Types.Nil
         (*
             - type of a sequence is the type of the last entry.
@@ -262,9 +262,9 @@ let rec transExp venv tenv exp =
             check_unit bodyl;
             lift_ty Types.Unit
         )
-        (* TODO: think of a way to prevent assignation to sym inside bodyl *)
         | S.For (sym, froml, tol, bodyl) -> (
-            let venv' = Symbol.Table.add venv ~key:sym ~data:(Env.VarEntry Types.Int)  in
+            (* adding the index to venv, as 'RO' so we can't assign it in the source *)
+            let venv' = Symbol.Table.add venv ~key:sym ~data:(Env.VarEntry (Types.Int, false))  in
             let ty = (transExp  venv' tenv bodyl).ty in
             if not @@ Types.compat ty Types.Unit
             then type_error exp.L.loc @@
@@ -276,27 +276,31 @@ let rec transExp venv tenv exp =
         | S.Break _ -> lift_ty Types.Unit
         | S.Assign (vl, el) -> (
             let ret = lift_ty Types.Unit in
-            let varty = (trLValue vl).ty in
-            check_ty varty el; ret
+            let vartyexp, assign = trLValue vl in
+            let varty = vartyexp.ty in
+            if assign then (check_ty varty el; ret)
+            else type_error exp.L.loc @@
+              sprintf "Assigning a RO variable is forbidden (for loop index, function argument)"
         )
         | S.Let (decl, el) ->
             let venv', tenv' = transDecs venv tenv decl in
             transExp venv' tenv' el
 
-    (* trLValue: S.lvalue location -> expty *)
+    (* trLValue: S.lvalue location -> expty * bool *)
     and trLValue var =
     match var.L.item with
-    | S.VarId sl -> lift_ty (match venv_find sl venv with
-        | Env.VarEntry ty -> ty
-        | Env.FunEntry _ ->
-          type_error sl.L.loc @@
-          sprintf "%s is a function, expected a variable" (Symbol.name sl.L.item)
-        )
+      | S.VarId sl -> begin
+          match venv_find sl venv with
+          | Env.VarEntry (ty, assign) -> lift_ty ty, assign
+          | Env.FunEntry _ ->
+            type_error sl.L.loc @@
+            sprintf "%s is a function, expected a variable" (Symbol.name sl.L.item)
+        end
     | S.FieldAccess (vl, sl) -> (
-        let ty = (trLValue vl).ty in
+        let ty = (fst @@ trLValue vl).ty in
         match ty with
             | Types.Record (fields, _) -> (
-                try lift_ty (List.Assoc.find_exn fields sl.L.item)
+                try lift_ty (List.Assoc.find_exn fields sl.L.item), true
                 with Not_found -> name_error sl.L.loc @@
                                     sprintf "Unknown field %s for record %s"
                                     (Symbol.name sl.L.item) (Types.to_string ty)
@@ -305,11 +309,11 @@ let rec transExp venv tenv exp =
                     sprintf "%s is not of Record type" (Types.to_string ty)
         )
     | S.ArrayAccess (vl, el) -> (
-        let ty = (trLValue vl).ty in
+        let ty = (fst @@ trLValue vl).ty in
         match ty with
             | Types.Array (typ, _) -> (
                 check_int el;
-                lift_ty typ
+                lift_ty typ, true
             )
             | _ -> type_error vl.L.loc @@
                     sprintf "%s is not of Array type" (Types.to_string ty)
@@ -342,7 +346,7 @@ and transDec venv tenv = function
             | _ -> ()
         end
       end;
-      Symbol.Table.add venv ~key:var.S.var_name.L.item ~data:(Env.VarEntry tyexp.ty), tenv
+      Symbol.Table.add venv ~key:var.S.var_name.L.item ~data:(Env.VarEntry (tyexp.ty, true)), tenv
     )
   | S.FunDec funlist ->
     (* gather the headers of each function *)
@@ -395,9 +399,10 @@ and trans_typ tenv ltypdec =
 
 and trans_fun venv tenv (lfundec, (argsty, retty)) =
   let fundec = lfundec.L.item in
+  (* Can't assign variable that are input variable of a function *)
   let venv' = List.fold_left argsty
       ~f:(fun venv_acc (name, ty) -> Symbol.Table.add venv_acc
-             ~key:name.L.item ~data:(Env.VarEntry ty))
+             ~key:name.L.item ~data:(Env.VarEntry (ty, false)))
       ~init:venv in
   let body_tyexp = transExp venv' tenv fundec.S.body in
   if not @@ phys_equal body_tyexp.ty retty then

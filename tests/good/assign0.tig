@@ -1,0 +1,15 @@
+/* function id 's argument x is RO but local variable shadowing it is not */
+let 
+    function id (x : int) : int =
+    let var x := 4 in
+        x
+    end
+
+    function loop (x: int) =
+    for i := 0 to x do
+        let var i := 4 in
+            print("\n")
+        end
+
+in id (3)
+end

@@ -1,0 +1,6 @@
+let var N := 8 in
+  for i := 0 to N - 1 do (
+    i := 4;
+    print("\n")
+  )
+end

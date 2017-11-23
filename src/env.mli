@@ -1,5 +1,5 @@
 type entry =
-    | VarEntry of Types.t
+    | VarEntry of Types.t * bool
     | FunEntry of Types.t list * Types.t
 
 val base_venv : entry Symbol.Table.t

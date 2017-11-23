@@ -146,9 +146,9 @@ let fix_name_ty tenv =
 
 (* TODO improve error message here,
    might remove some calls to check_* to have more precise log *)
-(* transExp: venv -> tenv -> S.exp -> expty *)
+(* transExp: bool -> venv -> tenv -> S.exp -> expty *)
 (* Note: tenv must not have Types.Name(None) entries *)
-let rec transExp venv tenv exp =
+let rec transExp allow_break venv tenv exp =
   let rec check_ty ty exp =
     let ty' = (trExp exp).ty in
     if not @@ Types.compat ty ty'
@@ -157,8 +157,6 @@ let rec transExp venv tenv exp =
         (Types.to_string ty) (Types.to_string ty')
 
     and check_int exp = check_ty Types.Int exp
-
-    and check_unit exp = check_ty Types.Unit exp
 
     and trExp exp = match exp.L.item with
         | S.Lvalue vl -> fst @@ trLValue vl
@@ -170,7 +168,8 @@ let rec transExp venv tenv exp =
               its value will be discarded
         *)
         | S.Seq ell -> List.fold_left ell
-            ~f:(fun _ el -> trExp el) ~init:{ exp = (); ty = Types.Unit }
+                         ~f:(fun _ el -> trExp el)
+                         ~init:{ exp = (); ty = Types.Unit }
         | S.Int _ -> lift_ty Types.Int
         | S.String _ -> lift_ty Types.String
         | S.FunCall (sl, ell) -> (
@@ -259,13 +258,17 @@ let rec transExp venv tenv exp =
         )
         | S.While (condl, bodyl) -> (
             check_int condl;
-            check_unit bodyl;
-            lift_ty Types.Unit
+            let ty = (transExp true venv tenv bodyl).ty in
+            if not @@ Types.compat ty Types.Unit
+            then type_error exp.L.loc @@
+              sprintf "The body of a While loop must be of Unit type, found %s"
+                (Types.to_string ty)
+            else lift_ty Types.Unit
         )
         | S.For (sym, froml, tol, bodyl) -> (
             (* adding the index to venv, as 'RO' so we can't assign it in the source *)
             let venv' = Symbol.Table.add venv ~key:sym ~data:(Env.VarEntry (Types.Int, false))  in
-            let ty = (transExp  venv' tenv bodyl).ty in
+            let ty = (transExp  true venv' tenv bodyl).ty in
             if not @@ Types.compat ty Types.Unit
             then type_error exp.L.loc @@
                 sprintf "The body of a For loop must be of Unit type, found %s"
@@ -273,18 +276,19 @@ let rec transExp venv tenv exp =
             else (check_int froml; check_int tol; lift_ty Types.Unit)
           )
         (* TODO: check that BREAK is inside a loop *)
-        | S.Break _ -> lift_ty Types.Unit
+        | S.Break _ -> if allow_break then lift_ty Types.Unit
+          else type_error exp.L.loc "Found 'break' instruction outside of For/While loop"
         | S.Assign (vl, el) -> (
             let ret = lift_ty Types.Unit in
             let vartyexp, assign = trLValue vl in
             let varty = vartyexp.ty in
             if assign then (check_ty varty el; ret)
             else type_error exp.L.loc @@
-              sprintf "Assigning a RO variable is forbidden (for loop index, function argument)"
+              sprintf "Assigning a RO variable is forbidden (For loop index, function argument)"
         )
         | S.Let (decl, el) ->
             let venv', tenv' = transDecs venv tenv decl in
-            transExp venv' tenv' el
+            transExp allow_break venv' tenv' el
 
     (* trLValue: S.lvalue location -> expty * bool *)
     and trLValue var =
@@ -331,7 +335,7 @@ and transDecs venv tenv =
 and transDec venv tenv = function
   | S.VarDec vl -> (
       let var = vl.L.item in
-      let tyexp = transExp venv tenv var.S.value in
+      let tyexp = transExp false venv tenv var.S.value in
       begin
         match var.S.var_type with
         | Some sl -> let styp = tenv_find sl tenv in
@@ -404,7 +408,7 @@ and trans_fun venv tenv (lfundec, (argsty, retty)) =
       ~f:(fun venv_acc (name, ty) -> Symbol.Table.add venv_acc
              ~key:name.L.item ~data:(Env.VarEntry (ty, false)))
       ~init:venv in
-  let body_tyexp = transExp venv' tenv fundec.S.body in
+  let body_tyexp = transExp false venv' tenv fundec.S.body in
   if not @@ phys_equal body_tyexp.ty retty then
       type_error lfundec.L.loc @@
       sprintf "The body of this function is of type %s, not %s"
@@ -416,4 +420,4 @@ and trans_fun venv tenv (lfundec, (argsty, retty)) =
 let transProg exp =
   let lexp = L.mkdummy exp in
   let venv = Stdlib.init Env.base_venv in
-  let _ = transExp venv Env.base_tenv lexp in ()
+  let _ = transExp false venv Env.base_tenv lexp in ()

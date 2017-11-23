@@ -2,10 +2,10 @@
 Vinz <vincent.siles@ens-lyon.org>
 v0.1, 2017-11-23
 
-. Low Level
+. High Priority
+. Moderate Priority
+. Low Priority
 * Shadowing
 ** Read about shadowing
 ** Fix shadowing issues, if any
 ** Add compilator option to print shadowing warning
-. Moderate Level
-* Prevent `break` to be used outside `for` or `while` loops

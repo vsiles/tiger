@@ -151,16 +151,10 @@ let fix_name_ty tenv =
 let rec transExp venv tenv exp =
   let rec check_ty ty exp =
     let ty' = (trExp exp).ty in
-    let ty1 = Types.unroll ty in
-    let ty2 = Types.unroll ty' in
-    match ty1, ty2 with
-    | Types.Nil, Types.Record _ -> ()
-    | Types.Record _, Types.Nil -> ()
-    | _, _ ->
-      if not @@ phys_equal ty1 ty2
-      then type_error exp.L.loc @@
-        sprintf "%s expected, found %s"
-          (Types.to_string ty) (Types.to_string ty')
+    if not @@ Types.compat ty ty'
+    then type_error exp.L.loc @@
+      sprintf "%s expected, found %s"
+        (Types.to_string ty) (Types.to_string ty')
 
     and check_int exp = check_ty Types.Int exp
 
@@ -181,11 +175,12 @@ let rec transExp venv tenv exp =
         | S.String _ -> lift_ty Types.String
         | S.FunCall (sl, ell) -> (
             let (argsty, retty) = (match fenv_find sl venv with
-                | Env.FunEntry (tylist, ty) -> (* might need to unroll *)
+                | Env.FunEntry (tylist, ty) ->
                   (tylist, ty)
                 | Env.VarEntry _ ->
-                type_error sl.L.loc @@
-                sprintf "%s is a variable, expected a function" (Symbol.name sl.L.item)
+                  type_error sl.L.loc @@
+                  sprintf "%s is a variable, expected a function"
+                    (Symbol.name sl.L.item)
             ) in (List.iter2_exn argsty ell check_ty; lift_ty retty)
         )
         | S.BinOp (el1, opl, el2) -> (
@@ -210,7 +205,8 @@ let rec transExp venv tenv exp =
                         "Equality test between 'nil' and non record expression (of type %s)"
                         (Types.to_string expty2.ty)
                   )
-                | _, _ -> if expty1.ty <> expty2.ty then
+                | _, _ -> if (not (Types.eq_compat expty1.ty expty2.ty)) ||
+                             (not (Types.compat expty1.ty expty2.ty)) then
                     type_error exp.L.loc @@ sprintf
                       "Ill-typed equality test: %s vs %s"
                       (Types.to_string expty1.ty) (Types.to_string expty2.ty)
@@ -242,7 +238,7 @@ let rec transExp venv tenv exp =
             let arrty = tenv_find sl tenv in
             begin match arrty with
               | Types.Array (ty, _) ->
-                if init_tyexp.ty = ty then lift_ty arrty
+                if Types.compat init_tyexp.ty ty then lift_ty arrty
                 else
                   type_error initl.L.loc @@
                   sprintf
@@ -270,7 +266,7 @@ let rec transExp venv tenv exp =
         | S.For (sym, froml, tol, bodyl) -> (
             let venv' = Symbol.Table.add venv ~key:sym ~data:(Env.VarEntry Types.Int)  in
             let ty = (transExp  venv' tenv bodyl).ty in
-            if ty <> Types.Unit
+            if not @@ Types.compat ty Types.Unit
             then type_error exp.L.loc @@
                 sprintf "The body of a For loop must be of Unit type, found %s"
                 (Types.to_string ty)
@@ -281,10 +277,7 @@ let rec transExp venv tenv exp =
         | S.Assign (vl, el) -> (
             let ret = lift_ty Types.Unit in
             let varty = (trLValue vl).ty in
-            let unrolled_type = Types.unroll varty in
-            match unrolled_type, el.L.item with
-                | Types.Record _, S.Nil _ -> ret
-                | _, _ -> (check_ty varty el; ret)
+            check_ty varty el; ret
         )
         | S.Let (decl, el) ->
             let venv', tenv' = transDecs venv tenv decl in
@@ -294,7 +287,7 @@ let rec transExp venv tenv exp =
     and trLValue var =
     match var.L.item with
     | S.VarId sl -> lift_ty (match venv_find sl venv with
-        | Env.VarEntry ty -> ty (* might need unroll *)
+        | Env.VarEntry ty -> ty
         | Env.FunEntry _ ->
           type_error sl.L.loc @@
           sprintf "%s is a function, expected a variable" (Symbol.name sl.L.item)
@@ -303,7 +296,7 @@ let rec transExp venv tenv exp =
         let ty = (trLValue vl).ty in
         match ty with
             | Types.Record (fields, _) -> (
-                try lift_ty (List.Assoc.find_exn fields sl.L.item) (* might need unroll *)
+                try lift_ty (List.Assoc.find_exn fields sl.L.item)
                 with Not_found -> name_error sl.L.loc @@
                                     sprintf "Unknown field %s for record %s"
                                     (Symbol.name sl.L.item) (Types.to_string ty)
@@ -316,7 +309,7 @@ let rec transExp venv tenv exp =
         match ty with
             | Types.Array (typ, _) -> (
                 check_int el;
-                lift_ty typ (* might need unroll *)
+                lift_ty typ
             )
             | _ -> type_error vl.L.loc @@
                     sprintf "%s is not of Array type" (Types.to_string ty)
@@ -337,15 +330,11 @@ and transDec venv tenv = function
       let tyexp = transExp venv tenv var.S.value in
       begin
         match var.S.var_type with
-        | Some sl ->
-          let styp = Types.unroll (tenv_find sl tenv) in begin
-              match styp, var.S.value.L.item with
-              | Types.Record _, S.Nil _ -> () (* var a : foo := nil allowed if foo is a Record *)
-              | _ , _ -> if styp <> tyexp.ty then
-                  type_error vl.L.loc @@
-                  sprintf "%s is incompatible with %s"
-                  (Types.to_string styp) (Types.to_string tyexp.ty)
-          end
+        | Some sl -> let styp = tenv_find sl tenv in
+          if not @@ Types.compat styp tyexp.ty then
+            type_error vl.L.loc @@
+            sprintf "%s is incompatible with %s"
+              (Types.to_string styp) (Types.to_string tyexp.ty)
         | None -> (* var a := nil is forbidden *) begin
             match var.S.value.L.item with
             | S.Nil _ -> type_error vl.L.loc

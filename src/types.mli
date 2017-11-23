@@ -11,7 +11,7 @@ type t =
     | Unit
     | Name of Symbol.t * t option ref
 
-(* extract the actual 't' of a Name type *)
-val unroll: t -> t
+val compat: t -> t -> bool
+val eq_compat: t -> t -> bool
 
 val to_string : t -> string

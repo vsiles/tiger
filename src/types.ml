@@ -40,6 +40,44 @@ let rec unroll = function
     | _ as foo -> foo
 ;;
 
+(* Check type compatibility:
+   - Nil is compatible with any Record type
+   - take care of type unrolling
+   - Do no use physical equality (might be issues with cyclic definition
+     but rely on the tag *)
+let rec compat t1 t2 =
+  let ut1 = unroll t1 in
+  let ut2 = unroll t2 in
+  match ut1, ut2 with
+  | Record _, Nil
+  | Nil, Record _ -> true
+  | Record (_, tag1), Record (_, tag2)
+  | Array (_, tag1), Array (_, tag2) -> Pervasives.compare tag1 tag2 = 0
+  | Int, Int
+  | String, String
+  | Nil, Nil
+  | Unit, Unit -> true
+  | Name _, _
+  | _, Name _ -> failwith "Can't happen because unroll should failed first"
+  | _, _ -> false
+;;
+
+(* Check for boolean operations:
+   - Arithmetic: + - * / require integer arguments
+   - Comparison < > >= <= require integer arguments
+   - Comparison = <> require integer, string, record or array arguments
+*)
+let eq_compat t1 t2 =
+  let ut1 = unroll t1 in
+  let ut2 = unroll t2 in
+  match ut1, ut2 with
+  | Int, Int -> true
+  | String, String -> true
+  | Record _, Record _ -> true
+  | Array _, Array _ -> true
+  | _ , _ -> false
+;;
+
 let rec to_string = function
     | Int -> "int"
     | String -> "string"

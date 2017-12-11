@@ -74,7 +74,7 @@ exp :
         S.While (cond, body)
     } %prec loop
     | For i = symbol ColonEq from = loc(exp) To to_ = loc(exp) Do body = loc(exp) {
-        S.For (i.L.item, from, to_, body)
+        S.For (i.L.item, ref true, from, to_, body)
     } %prec loop
     | unit = loc(Break) { S.Break unit }
     | Let decs = decs In body = loc(separated_list(Semi, loc(exp))) End {
@@ -150,15 +150,15 @@ tyfields :
 
 tyfield :
     | name = symbol Colon typ = symbol {
-        S.{ field_name = name; field_type = typ }
+        S.{ field_name = name; escape = ref true; field_type = typ }
     }
 
 vardec :
     | Var var_name = symbol ColonEq init = loc(exp) {
-        S.{ var_name; var_type = None; value = init }
+        S.{ var_name; escape = ref true; var_type = None; value = init }
     }
     | Var var_name = symbol Colon var_type = symbol ColonEq init = loc(exp) {
-        S.{ var_name; var_type = Some var_type; value = init; }
+        S.{ var_name; escape = ref true; var_type = Some var_type; value = init; }
     }
 
 %inline fundec :

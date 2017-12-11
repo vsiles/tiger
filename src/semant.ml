@@ -265,17 +265,16 @@ let rec transExp allow_break venv tenv exp =
                 (Types.to_string ty)
             else lift_ty Types.Unit
         )
-        | S.For (sym, froml, tol, bodyl) -> (
+        | S.For (sym, _, froml, tol, bodyl) -> (
             (* adding the index to venv, as 'RO' so we can't assign it in the source *)
             let venv' = Symbol.Table.add venv ~key:sym ~data:(Env.VarEntry (Types.Int, false))  in
-            let ty = (transExp  true venv' tenv bodyl).ty in
+            let ty = (transExp true venv' tenv bodyl).ty in
             if not @@ Types.compat ty Types.Unit
             then type_error exp.L.loc @@
                 sprintf "The body of a For loop must be of Unit type, found %s"
                 (Types.to_string ty)
             else (check_int froml; check_int tol; lift_ty Types.Unit)
           )
-        (* TODO: check that BREAK is inside a loop *)
         | S.Break _ -> if allow_break then lift_ty Types.Unit
           else type_error exp.L.loc "Found 'break' instruction outside of For/While loop"
         | S.Assign (vl, el) -> (

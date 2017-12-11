@@ -31,11 +31,13 @@ let translate_op l = function
 
 type tyfield = {
     field_name: Symbol.t Location.loc;
+    escape: bool ref;
     field_type: Symbol.t Location.loc;
 }
 
 let translate_field f = {
   field_name = f.Tig_syntax.field_name;
+  escape = f.Tig_syntax.escape;
   field_type = f.Tig_syntax.field_type;
   };;
 
@@ -72,8 +74,8 @@ type exp =
     | Array of Symbol.t Location.loc * exp Location.loc * exp Location.loc
     | If of exp Location.loc * exp Location.loc * exp Location.loc option
     | While of exp Location.loc * exp Location.loc
-    | For of Symbol.t * exp Location.loc * exp Location.loc *
-        exp Location.loc
+    | For of Symbol.t * bool ref (* escape *) * exp Location.loc *
+        exp Location.loc * exp Location.loc
     | Break of unit Location.loc
     | Assign of lvalue Location.loc * exp Location.loc
     | Let of dec list * exp Location.loc
@@ -93,6 +95,7 @@ and fundec = {
 
 and vardec = {
     var_name: Symbol.t Location.loc;
+    escape: bool ref;
     var_type: Symbol.t Location.loc option;
     value: exp Location.loc;
 }
@@ -140,7 +143,7 @@ let rec translate = function
             match elop with None -> None | Some el -> Some (mkloc (translate el.item) el.loc))
     | Tig_syntax.While (el1, el2) -> While (mkloc (translate el1.item) el1.loc,
         mkloc (translate el2.item) el2.loc)
-    | Tig_syntax.For (s, el1, el2, el3) -> For (s,
+    | Tig_syntax.For (s, esc, el1, el2, el3) -> For (s, esc,
         mkloc (translate el1.item) el1.loc,
         mkloc (translate el2.item) el2.loc,
         mkloc (translate el3.item) el3.loc)
@@ -167,6 +170,7 @@ and translate_fundec fdec = {
 
 and translate_vardec vdec = {
     var_name = vdec.Tig_syntax.var_name;
+    escape = vdec.Tig_syntax.escape;
     var_type = vdec.Tig_syntax.var_type;
     value = mkloc (translate vdec.Tig_syntax.value.item) vdec.Tig_syntax.value.loc
 }

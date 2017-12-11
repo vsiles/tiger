@@ -14,6 +14,7 @@ type op =
 
 type tyfield = {
     field_name: Symbol.t Location.loc;
+    escape: bool ref;
     field_type: Symbol.t Location.loc;
 }
 
@@ -35,8 +36,8 @@ type exp =
     | Array of Symbol.t Location.loc * exp Location.loc * exp Location.loc
     | If of exp Location.loc * exp Location.loc * exp Location.loc option
     | While of exp Location.loc * exp Location.loc
-    | For of Symbol.t * exp Location.loc * exp Location.loc *
-        exp Location.loc
+    | For of Symbol.t * bool ref (* escape *) * exp Location.loc *
+        exp Location.loc * exp Location.loc
     | Break of unit Location.loc
     | Assign of lvalue Location.loc * exp Location.loc
     | Let of dec list * exp Location.loc
@@ -56,6 +57,7 @@ and fundec = {
 
 and vardec = {
     var_name: Symbol.t Location.loc;
+    escape: bool ref;
     var_type: Symbol.t Location.loc option;
     value: exp Location.loc;
 }

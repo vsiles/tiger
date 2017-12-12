@@ -1,7 +1,7 @@
 type entry =
-  (* is the assignable using := or not (e.g. for loop index) *)
-  | VarEntry of Types.t * bool
-  | FunEntry of Types.t list * Types.t
+  (* The bool is the assignable using := or not (e.g. for loop index) *)
+  | VarEntry of Translate.access * Types.t * bool
+  | FunEntry of Translate.level * Temp.label * Types.t list * Types.t
 
 let base_venv = Symbol.Table.empty
 

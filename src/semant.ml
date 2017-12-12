@@ -174,7 +174,8 @@ let rec transExp allow_break venv tenv exp =
         | S.String _ -> lift_ty Types.String
         | S.FunCall (sl, ell) -> (
             let (argsty, retty) = (match fenv_find sl venv with
-                | Env.FunEntry (tylist, ty) ->
+            (* FIXME translate *)
+                | Env.FunEntry (_, _, tylist, ty) ->
                   (tylist, ty)
                 | Env.VarEntry _ ->
                   type_error sl.L.loc @@
@@ -267,7 +268,10 @@ let rec transExp allow_break venv tenv exp =
         )
         | S.For (sym, _, froml, tol, bodyl) -> (
             (* adding the index to venv, as 'RO' so we can't assign it in the source *)
-            let venv' = Symbol.Table.add venv ~key:sym ~data:(Env.VarEntry (Types.Int, false))  in
+            (* FIXME translate *)
+            let traccess = Translate.allocLocal Translate.outermost true in
+            let venv' = Symbol.Table.add venv ~key:sym
+                ~data:(Env.VarEntry (traccess, Types.Int, false))  in
             let ty = (transExp true venv' tenv bodyl).ty in
             if not @@ Types.compat ty Types.Unit
             then type_error exp.L.loc @@
@@ -294,7 +298,8 @@ let rec transExp allow_break venv tenv exp =
     match var.L.item with
       | S.VarId sl -> begin
           match venv_find sl venv with
-          | Env.VarEntry (ty, assign) -> lift_ty ty, assign
+          (* FIXME translate *)
+          | Env.VarEntry (_, ty, assign) -> lift_ty ty, assign
           | Env.FunEntry _ ->
             type_error sl.L.loc @@
             sprintf "%s is a function, expected a variable" (Symbol.name sl.L.item)
@@ -349,7 +354,11 @@ and transDec venv tenv = function
             | _ -> ()
         end
       end;
-      Symbol.Table.add venv ~key:var.S.var_name.L.item ~data:(Env.VarEntry (tyexp.ty, true)), tenv
+      (* FIXME translate *)
+      let traccess = Translate.allocLocal Translate.outermost true in
+      Symbol.Table.add venv
+        ~key:var.S.var_name.L.item
+        ~data:(Env.VarEntry (traccess, tyexp.ty, true)), tenv
     )
   | S.FunDec funlist ->
     (* gather the headers of each function *)
@@ -366,7 +375,9 @@ and transDec venv tenv = function
         ~f:(fun acc (lfundec, (argsty, retty)) ->
             Symbol.Table.add acc
               ~key:lfundec.L.item.S.fun_name.L.item
-              ~data:(Env.FunEntry (List.map argsty snd, retty)))
+              (* FIXME translate *)
+              ~data:(Env.FunEntry (Translate.outermost,
+                Temp.newlabel (), List.map argsty snd, retty)))
         ~init:venv in
     (* then parse each body with all headers in the environment *)
     List.fold_left fun_and_header_list
@@ -403,9 +414,11 @@ and trans_typ tenv ltypdec =
 and trans_fun venv tenv (lfundec, (argsty, retty)) =
   let fundec = lfundec.L.item in
   (* Can't assign variable that are input variable of a function *)
+  let traccess = Translate.allocLocal Translate.outermost true in
   let venv' = List.fold_left argsty
       ~f:(fun venv_acc (name, ty) -> Symbol.Table.add venv_acc
-             ~key:name.L.item ~data:(Env.VarEntry (ty, false)))
+      (* FIXME translate *)
+             ~key:name.L.item ~data:(Env.VarEntry (traccess, ty, false)))
       ~init:venv in
   let body_tyexp = transExp false venv' tenv fundec.S.body in
   if not @@ phys_equal body_tyexp.ty retty then

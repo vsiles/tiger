@@ -2,34 +2,46 @@
 open Core.Std
 
 (* function print(s: string) *)
-let print = Env.FunEntry ([Types.String], Types.Unit);;
+let print = Env.FunEntry (Translate.outermost,
+    Temp.namedlabel "std::print", [Types.String], Types.Unit);;
 
 (* function flush() *)
-let flush = Env.FunEntry([], Types.Unit);;
+let flush = Env.FunEntry (Translate.outermost,
+    Temp.namedlabel "std::flush", [], Types.Unit);;
 
 (* function getchar() : string *)
-let getchar = Env.FunEntry([], Types.String);;
+let getchar = Env.FunEntry (Translate.outermost,
+    Temp.namedlabel "std::getchar", [], Types.String);;
 
 (* function ord(s: string): int *)
-let ord = Env.FunEntry([Types.String], Types.Int);;
+let ord = Env.FunEntry (Translate.outermost,
+    Temp.namedlabel "std::ord", [Types.String], Types.Int);;
 
 (* function chr(i: int) : string *)
-let chr = Env.FunEntry([Types.Int], Types.String);;
+let chr = Env.FunEntry (Translate.outermost,
+    Temp.namedlabel "std::chr", [Types.Int], Types.String);;
 
 (* function size(s: sintrg) : int *)
-let size = Env.FunEntry([Types.String], Types.Int);;
+let size = Env.FunEntry (Translate.outermost,
+    Temp.namedlabel "std::size", [Types.String], Types.Int);;
 
 (* function substring(s: string, first:int, n:int) : string *)
-let substring = Env.FunEntry([Types.String; Types.Int; Types.Int], Types.String);;
+let substring = Env.FunEntry (Translate.outermost,
+    Temp.namedlabel "std::substring",
+    [Types.String; Types.Int; Types.Int], Types.String);;
 
 (* function concat (s1: string, s2: string) : string *)
-let concat = Env.FunEntry([Types.String; Types.String], Types.String);;
+let concat = Env.FunEntry (Translate.outermost,
+    Temp.namedlabel "std::concat",
+    [Types.String; Types.String], Types.String);;
 
 (* function not (i: int) : int *)
-let notb = Env.FunEntry([Types.Int], Types.Int);;
+let notb = Env.FunEntry (Translate.outermost,
+    Temp.namedlabel "std::notb", [Types.Int], Types.Int);;
 
 (* function exit (i: int) *)
-let exit = Env.FunEntry([Types.Int], Types.Unit);;
+let exit = Env.FunEntry (Translate.outermost,
+    Temp.namedlabel "std::exit", [Types.Int], Types.Unit);;
 
 let stdlib_funs = [
     ("print", print);

@@ -1,6 +1,9 @@
 open Core.Std
 open OUnit2
 
+module T = Translate.Make(Arm32frame.ARM32Frame)
+module S = Semant.Make(T)
+
 let process filename =
   try
 (*    let _ = printf "Executing test %s\n" filename in *)
@@ -8,7 +11,7 @@ let process filename =
     let lexbuf = Lexing.from_channel inx in
     let raw_term = Parser.prog Lexer.lexer lexbuf in
     let expr = Syntax.translate raw_term in
-    let _ = Semant.transProg expr in
+    let _ = S.transProg expr in
     In_channel.close inx;
     0
   with

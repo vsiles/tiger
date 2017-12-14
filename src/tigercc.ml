@@ -1,7 +1,6 @@
 open Core.Std
 open Errors
 open Types
-open Semant
 
 (* command line spec *)
 let cmdline_spec =
@@ -9,6 +8,9 @@ let cmdline_spec =
     empty
     +> anon ("filename" %:string)
 ;;
+
+module T = Translate.Make(Arm32frame.ARM32Frame)
+module S = Semant.Make(T)
 
 let process filename =
     try
@@ -18,7 +20,7 @@ let process filename =
         let raw_term = Parser.prog Lexer.lexer lexbuf in
         let expr = Syntax.translate raw_term in
         printf "> Parsing: OK\n";
-        let _ = Semant.transProg expr in
+        let _ = S.transProg expr in
         printf "> Typing: OK\n";
         In_channel.close inx
     with

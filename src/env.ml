@@ -1,11 +1,30 @@
-type entry =
-  (* The bool is the assignable using := or not (e.g. for loop index) *)
-  | VarEntry of Translate.access * Types.t * bool
-  | FunEntry of Translate.level * Temp.label * Types.t list * Types.t
+module type Env = sig
+  type t
+  type t'
+  type entry =
+    (* The bool is the assignable using := or not (e.g. for loop index) *)
+    | VarEntry of t * Types.t * bool
+    | FunEntry of t' * Temp.label * Types.t list * Types.t
 
-let base_venv = Symbol.Table.empty
+  val base_venv : entry Symbol.Table.t
+  val base_tenv : Types.t Symbol.Table.t
+end
 
-let base_tenv =
-  let tempty = Symbol.Table.empty in
-  let tint = Symbol.Table.add tempty ~key:(Symbol.mk "int") ~data:Types.Int in
-  Symbol.Table.add tint ~key:(Symbol.mk "string") ~data:Types.String
+module Make (T: Translate.Translate) :
+    (Env with type t := T.access and type t' := T.level) = struct
+
+    type t = T.access
+    type t' = T.level
+
+    type entry =
+        (* The bool is the assignable using := or not (e.g. for loop index) *)
+        | VarEntry of t * Types.t * bool
+        | FunEntry of t' * Temp.label * Types.t list * Types.t
+
+    let base_venv = Symbol.Table.empty
+
+    let base_tenv =
+      let tempty = Symbol.Table.empty in
+      let tint = Symbol.Table.add tempty ~key:(Symbol.mk "int") ~data:Types.Int in
+      Symbol.Table.add tint ~key:(Symbol.mk "string") ~data:Types.String
+  end

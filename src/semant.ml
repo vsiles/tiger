@@ -5,7 +5,16 @@ module L = Location
 module S = Syntax
 module UF = Core_kernel.Union_find
 
-type venv = Env.entry Symbol.Table.t
+module type Semant = sig
+  val transProg: Syntax.exp -> unit
+end
+
+module Make (T: Translate.Translate) : Semant = struct
+
+module E = Env.Make(T)
+module Std = Stdlib.Make(T)
+
+type venv = E.entry Symbol.Table.t
 type tenv = Types.t Symbol.Table.t
 
 let env_find env_name sym env =
@@ -24,7 +33,7 @@ let fenv_find = env_find "function"
 (* Symbol.Table.t -> tenv -> Types.t *)
 let tenv_find = env_find "type"
 
-type expty = {exp: Translate.exp; ty: Types.t}
+type expty = {exp: T.exp; ty: Types.t}
 
 (*
     transTy: tenv -> S.ty -> Types.t
@@ -175,9 +184,9 @@ let rec transExp allow_break venv tenv exp =
         | S.FunCall (sl, ell) -> (
             let (argsty, retty) = (match fenv_find sl venv with
             (* FIXME translate *)
-                | Env.FunEntry (_, _, tylist, ty) ->
+                | E.FunEntry (_, _, tylist, ty) ->
                   (tylist, ty)
-                | Env.VarEntry _ ->
+                | E.VarEntry _ ->
                   type_error sl.L.loc @@
                   sprintf "%s is a variable, expected a function"
                     (Symbol.name sl.L.item)
@@ -269,9 +278,9 @@ let rec transExp allow_break venv tenv exp =
         | S.For (sym, _, froml, tol, bodyl) -> (
             (* adding the index to venv, as 'RO' so we can't assign it in the source *)
             (* FIXME translate *)
-            let traccess = Translate.allocLocal Translate.outermost true in
+            let traccess = T.allocLocal T.outermost true in
             let venv' = Symbol.Table.add venv ~key:sym
-                ~data:(Env.VarEntry (traccess, Types.Int, false))  in
+                ~data:(E.VarEntry (traccess, Types.Int, false))  in
             let ty = (transExp true venv' tenv bodyl).ty in
             if not @@ Types.compat ty Types.Unit
             then type_error exp.L.loc @@
@@ -299,8 +308,8 @@ let rec transExp allow_break venv tenv exp =
       | S.VarId sl -> begin
           match venv_find sl venv with
           (* FIXME translate *)
-          | Env.VarEntry (_, ty, assign) -> lift_ty ty, assign
-          | Env.FunEntry _ ->
+          | E.VarEntry (_, ty, assign) -> lift_ty ty, assign
+          | E.FunEntry _ ->
             type_error sl.L.loc @@
             sprintf "%s is a function, expected a variable" (Symbol.name sl.L.item)
         end
@@ -355,10 +364,10 @@ and transDec venv tenv = function
         end
       end;
       (* FIXME translate *)
-      let traccess = Translate.allocLocal Translate.outermost true in
+      let traccess = T.allocLocal T.outermost true in
       Symbol.Table.add venv
         ~key:var.S.var_name.L.item
-        ~data:(Env.VarEntry (traccess, tyexp.ty, true)), tenv
+        ~data:(E.VarEntry (traccess, tyexp.ty, true)), tenv
     )
   | S.FunDec funlist ->
     (* gather the headers of each function *)
@@ -376,7 +385,7 @@ and transDec venv tenv = function
             Symbol.Table.add acc
               ~key:lfundec.L.item.S.fun_name.L.item
               (* FIXME translate *)
-              ~data:(Env.FunEntry (Translate.outermost,
+              ~data:(E.FunEntry (T.outermost,
                 Temp.newlabel (), List.map argsty snd, retty)))
         ~init:venv in
     (* then parse each body with all headers in the environment *)
@@ -414,11 +423,11 @@ and trans_typ tenv ltypdec =
 and trans_fun venv tenv (lfundec, (argsty, retty)) =
   let fundec = lfundec.L.item in
   (* Can't assign variable that are input variable of a function *)
-  let traccess = Translate.allocLocal Translate.outermost true in
+  let traccess = T.allocLocal T.outermost true in
   let venv' = List.fold_left argsty
       ~f:(fun venv_acc (name, ty) -> Symbol.Table.add venv_acc
       (* FIXME translate *)
-             ~key:name.L.item ~data:(Env.VarEntry (traccess, ty, false)))
+             ~key:name.L.item ~data:(E.VarEntry (traccess, ty, false)))
       ~init:venv in
   let body_tyexp = transExp false venv' tenv fundec.S.body in
   if not @@ phys_equal body_tyexp.ty retty then
@@ -431,5 +440,7 @@ and trans_fun venv tenv (lfundec, (argsty, retty)) =
 (* transProg: Syntax.exp -> unit *)
 let transProg exp =
   let lexp = L.mkdummy exp in
-  let venv = Stdlib.init Env.base_venv in
-  let _ = transExp false venv Env.base_tenv lexp in ()
+  let venv = Std.init E.base_venv in
+  let _ = transExp false venv E.base_tenv lexp in ()
+
+end

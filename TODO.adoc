@@ -4,6 +4,9 @@ v0.1, 2017-11-23
 
 . High Priority
 . Moderate Priority
+* Introduce a nice module hierarchy
+* Fix the semant.ml file (see FIXME)
+* Implement ARM32 Frame structure
 . Low Priority
 * Shadowing
 ** Read about shadowing

@@ -48,15 +48,25 @@ let transTy tenv = function
         Types.new_tag())
 ;;
 
+(* Extract name, type & escape information from a fundec::args *)
+let rec trans_fundec_args tenv = function
+  | hd :: tl ->
+    let name = hd.S.field_name and
+        typ = tenv_find hd.S.field_type tenv and
+        escp = !(hd.S.escape) in
+    let l1, l2 = trans_fundec_args tenv tl in
+    ((name, typ, escp) :: l1), (escp :: l2)
+  | [] -> [], []
+;;
+
 (* Helper function to extract type info for function signature *)
 let trans_fun_sig tenv lfundec =
   let fundec = lfundec.L.item in
-  let argsty = List.map fundec.S.args
-    (fun field -> field.S.field_name, tenv_find field.S.field_type tenv) in
+  let argsty, esclist = trans_fundec_args tenv fundec.S.args in
   let retty = match fundec.S.return_type with
     | None -> Types.Unit
     | Some ret -> tenv_find ret tenv in
-  argsty, retty
+  argsty, esclist, retty
 ;;
 
 (* temp function *)
@@ -155,9 +165,9 @@ let fix_name_ty tenv =
 
 (* TODO improve error message here,
    might remove some calls to check_* to have more precise log *)
-(* transExp: bool -> venv -> tenv -> S.exp -> expty *)
+(* transExp: Translate.level -> bool -> venv -> tenv -> S.exp -> expty *)
 (* Note: tenv must not have Types.Name(None) entries *)
-let rec transExp allow_break venv tenv exp =
+let rec transExp level allow_break venv tenv exp =
   let rec check_ty ty exp =
     let ty' = (trExp exp).ty in
     if not @@ Types.compat ty ty'
@@ -183,9 +193,7 @@ let rec transExp allow_break venv tenv exp =
         | S.String _ -> lift_ty Types.String
         | S.FunCall (sl, ell) -> (
             let (argsty, retty) = (match fenv_find sl venv with
-            (* FIXME translate *)
-                | E.FunEntry (_, _, tylist, ty) ->
-                  (tylist, ty)
+                | E.FunEntry (_, _, tylist, ty) -> (tylist, ty)
                 | E.VarEntry _ ->
                   type_error sl.L.loc @@
                   sprintf "%s is a variable, expected a function"
@@ -268,7 +276,7 @@ let rec transExp allow_break venv tenv exp =
         )
         | S.While (condl, bodyl) -> (
             check_int condl;
-            let ty = (transExp true venv tenv bodyl).ty in
+            let ty = (transExp level true venv tenv bodyl).ty in
             if not @@ Types.compat ty Types.Unit
             then type_error exp.L.loc @@
               sprintf "The body of a While loop must be of Unit type, found %s"
@@ -277,11 +285,11 @@ let rec transExp allow_break venv tenv exp =
         )
         | S.For (sym, _, froml, tol, bodyl) -> (
             (* adding the index to venv, as 'RO' so we can't assign it in the source *)
-            (* FIXME translate *)
-            let traccess = T.allocLocal T.outermost true in
+            (* FIXME FindEscape *)
+            let access = T.allocLocal level true in
             let venv' = Symbol.Table.add venv ~key:sym
-                ~data:(E.VarEntry (traccess, Types.Int, false))  in
-            let ty = (transExp true venv' tenv bodyl).ty in
+                ~data:(E.VarEntry (access, Types.Int, false))  in
+            let ty = (transExp level true venv' tenv bodyl).ty in
             if not @@ Types.compat ty Types.Unit
             then type_error exp.L.loc @@
                 sprintf "The body of a For loop must be of Unit type, found %s"
@@ -299,15 +307,14 @@ let rec transExp allow_break venv tenv exp =
               sprintf "Assigning a RO variable is forbidden (For loop index, function argument)"
         )
         | S.Let (decl, el) ->
-            let venv', tenv' = transDecs venv tenv decl in
-            transExp allow_break venv' tenv' el
+            let venv', tenv' = transDecs level venv tenv decl in
+            transExp level allow_break venv' tenv' el
 
     (* trLValue: S.lvalue location -> expty * bool *)
     and trLValue var =
     match var.L.item with
       | S.VarId sl -> begin
           match venv_find sl venv with
-          (* FIXME translate *)
           | E.VarEntry (_, ty, assign) -> lift_ty ty, assign
           | E.FunEntry _ ->
             type_error sl.L.loc @@
@@ -337,18 +344,20 @@ let rec transExp allow_break venv tenv exp =
     )
 in trExp exp
 
-(* transDecs: venv -> tenv -> S.dec list -> (venv * tenv) *)
+(* transDecs: Translate.level -> venv -> tenv -> S.dec list -> (venv * tenv) *)
 (* Note: tenv must not have Types.Name(None) entries, neither I/O *)
-and transDecs venv tenv =
-  List.fold_left ~f:(fun (venv', tenv') dec -> transDec venv' tenv' dec)
+and transDecs level venv tenv =
+  List.fold_left ~f:(fun (venv', tenv') dec -> transDec level venv' tenv' dec)
     ~init:(venv, tenv)
 
-(* transDec: venv -> tenv -> S.dec -> (venv * tenv) *)
+(* transDec: Translate.level -> venv -> tenv -> S.dec -> (venv * tenv) *)
 (* Note: tenv must not have Types.Name(None) entries, neither I/O *)
-and transDec venv tenv = function
+and transDec level venv tenv = function
   | S.VarDec vl -> (
       let var = vl.L.item in
-      let tyexp = transExp false venv tenv var.S.value in
+      let escp = var.S.escape in
+      let access = T.allocLocal level !escp in
+      let tyexp = transExp level false venv tenv var.S.value in
       begin
         match var.S.var_type with
         | Some sl -> let styp = tenv_find sl tenv in
@@ -363,30 +372,29 @@ and transDec venv tenv = function
             | _ -> ()
         end
       end;
-      (* FIXME translate *)
-      let traccess = T.allocLocal T.outermost true in
       Symbol.Table.add venv
         ~key:var.S.var_name.L.item
-        ~data:(E.VarEntry (traccess, tyexp.ty, true)), tenv
+        ~data:(E.VarEntry (access, tyexp.ty, true)), tenv
     )
   | S.FunDec funlist ->
-    (* gather the headers of each function *)
+    (* gather the headers of each function. Also create label & level *)
     let fun_and_header_list =
       List.fold_right
         funlist
         ~f:(fun lfundec acc ->
-            let argsty,retty = trans_fun_sig tenv lfundec in
-            (lfundec, (argsty, retty)) :: acc)
+            let argsty,esclist,retty = trans_fun_sig tenv lfundec in
+            let name = Temp.newlabel() in
+            let newlvl = T.newLevel ~parent:level ~name ~formals:esclist in
+            (lfundec, (argsty, retty), name, newlvl) :: acc)
         ~init:[] in
     (* update the venv with FunEntry for each function *)
     let venv' = List.fold_left
         fun_and_header_list
-        ~f:(fun acc (lfundec, (argsty, retty)) ->
+        ~f:(fun acc (lfundec, (argsty, retty), name, newlvl) ->
+            let tylist = List.map argsty (fun (_, x, _) -> x) in
             Symbol.Table.add acc
               ~key:lfundec.L.item.S.fun_name.L.item
-              (* FIXME translate *)
-              ~data:(E.FunEntry (T.outermost,
-                Temp.newlabel (), List.map argsty snd, retty)))
+              ~data:(E.FunEntry (newlvl, name, tylist, retty)))
         ~init:venv in
     (* then parse each body with all headers in the environment *)
     List.fold_left fun_and_header_list
@@ -420,16 +428,16 @@ and trans_typ tenv ltypdec =
   let typ = typdec.S.typ in
   Symbol.Table.add tenv ~key:type_name.L.item ~data:(transTy tenv typ)
 
-and trans_fun venv tenv (lfundec, (argsty, retty)) =
+and trans_fun venv tenv (lfundec, (argsty, retty), name, level) =
   let fundec = lfundec.L.item in
-  (* Can't assign variable that are input variable of a function *)
-  let traccess = T.allocLocal T.outermost true in
   let venv' = List.fold_left argsty
-      ~f:(fun venv_acc (name, ty) -> Symbol.Table.add venv_acc
-      (* FIXME translate *)
-             ~key:name.L.item ~data:(E.VarEntry (traccess, ty, false)))
+      ~f:(fun venv_acc (name, ty, escp) ->
+          let access = T.allocLocal level escp in
+            Symbol.Table.add venv_acc
+              (* Can't assign variable that are input variable of a function *)
+              ~key:name.L.item ~data:(E.VarEntry (access, ty, false)))
       ~init:venv in
-  let body_tyexp = transExp false venv' tenv fundec.S.body in
+  let body_tyexp = transExp level false venv' tenv fundec.S.body in
   if not @@ phys_equal body_tyexp.ty retty then
       type_error lfundec.L.loc @@
       sprintf "The body of this function is of type %s, not %s"
@@ -441,6 +449,10 @@ and trans_fun venv tenv (lfundec, (argsty, retty)) =
 let transProg exp =
   let lexp = L.mkdummy exp in
   let venv = Std.init E.base_venv in
-  let _ = transExp false venv E.base_tenv lexp in ()
+  let mainlvl = T.newLevel
+      ~parent:T.outermost
+      ~name:(Temp.namedlabel "__main")
+      ~formals:[] in
+  let _ = transExp mainlvl false venv E.base_tenv lexp in ()
 
 end

@@ -47,7 +47,7 @@ debug:
 
 test:
 	@echo "  TESTING " $(ECHO_OUTPUT)
-	$(Q)$(OCB) -package oUnit -tag debug -I tests test.byte
-	$(Q)./test.byte
+	$(Q)$(OCB) -package oUnit -tag debug -I tests runtest.byte
+	$(Q)./runtest.byte
 
 .PHONY: test clean

@@ -19,6 +19,7 @@ let process filename =
         printf "Parsing: %s\n" filename;
         let raw_term = Parser.prog Lexer.lexer lexbuf in
         let expr = Syntax.translate raw_term in
+        let _ = Findescape.findEscape expr in
         printf "> Parsing: OK\n";
         let _ = S.transProg expr in
         printf "> Typing: OK\n";

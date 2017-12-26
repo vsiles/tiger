@@ -16,7 +16,7 @@ let env_find sym env =
     sprintf "Unknown variable: %s" (Symbol.name sym.L.item)
 ;;
 
-(* escEnv -> depth -> Syntax.exp -> unit *)
+(* escEnv -> depth -> Syntax.exp L.loc -> unit *)
 let rec traverseExp env depth exp =
   (* Syntax.exp -> unit *)
     let rec traverse exp = match exp.L.item with
@@ -38,6 +38,7 @@ let rec traverseExp env depth exp =
         end
       | S.While (condl, bodyl) -> begin traverse condl; traverse bodyl; end
       | S.For (sym, esc, froml, tol, bodyl) ->
+          let _ = printf "FindEscape: For loop at depth %d\n" depth in
           let env' = Symbol.Table.add env ~key:sym ~data:(depth, esc) in
             traverse froml;
             traverse tol;
@@ -50,8 +51,12 @@ let rec traverseExp env depth exp =
     (* traverseVar: S.lvalue location -> unit *)
     and traverseVar var = match var.L.item with
       | S.VarId sl ->
-        let (curr_depth, esc) = env_find sl env in
-            if curr_depth < depth then esc :=  true else ()
+        let (decl_depth, esc) = env_find sl env in
+        if decl_depth < depth then (
+          printf "Flipping %s at level %d (was %d)\n"
+                 (Symbol.name sl.L.item)
+                 depth decl_depth;
+        esc :=  true ) else ()
       | S.FieldAccess (vl, _) -> traverseVar vl
       | S.ArrayAccess (vl, el) -> begin
           traverseVar vl;
@@ -86,3 +91,9 @@ and traverseDecs env depth l =
         env
         end
   in List.fold_left l ~f:(fun acc dec -> traverseDec acc dec) ~init:env
+
+(* Syntax.exp -> unit *)
+let findEscape exp =
+  let lexp = L.mkdummy exp in
+  traverseExp Symbol.Table.empty 0 lexp
+;;

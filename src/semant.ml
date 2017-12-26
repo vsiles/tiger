@@ -283,10 +283,10 @@ let rec transExp level allow_break venv tenv exp =
                 (Types.to_string ty)
             else lift_ty Types.Unit
         )
-        | S.For (sym, _, froml, tol, bodyl) -> (
+        | S.For (sym, escp, froml, tol, bodyl) -> (
             (* adding the index to venv, as 'RO' so we can't assign it in the source *)
-            (* FIXME FindEscape *)
-            let access = T.allocLocal level true in
+            let _ = printf "allocLocal for loop variable %s\n" (Symbol.name sym); flush_all() in
+            let access = T.allocLocal level !escp in
             let venv' = Symbol.Table.add venv ~key:sym
                 ~data:(E.VarEntry (access, Types.Int, false))  in
             let ty = (transExp level true venv' tenv bodyl).ty in

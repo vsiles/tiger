@@ -1,5 +1,7 @@
 open Core.Std
 
+module T = Tree
+
 (*
     To be able to make a more precise frame implementation
     I would need the type of the variable to allocate. So in the
@@ -14,6 +16,8 @@ open Core.Std
 module ARM32Frame : Frame.Frame =
     struct
       let wordSize = 4
+      let fp = Temp.newtemp()
+
       let numArgRegs = 4
       type access = InFrame of int | InReg of Temp.temp
       type frame = {
@@ -63,4 +67,9 @@ module ARM32Frame : Frame.Frame =
       let name frame = frame.name;;
 
       let formals frame = frame.formals;;
+
+      let exp access addr = match access with
+        | InFrame offset -> T.MEM (T.BINOP (T.PLUS, T.CONST offset, addr))
+        | InReg temp -> T.TEMP temp
+      ;;
     end

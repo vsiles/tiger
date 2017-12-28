@@ -4,11 +4,7 @@ module T = Tree
 
 module type Translate =
     sig
-      type exp =
-        | Ex of T.exp (* expression *)
-        | Nx of T.stm (* void expression *)
-        | Cx of (Temp.label -> Temp.label -> T.stm) (* conditionals *)
-
+      type exp
       type level
       type access
 
@@ -17,6 +13,8 @@ module type Translate =
         formals:bool list -> level
       val formals: level -> access list
       val allocLocal: level -> bool -> access
+
+      val simpleVar: access -> level -> exp
     end
 
 module Make (F: Frame.Frame) : Translate = struct
@@ -61,7 +59,19 @@ module Make (F: Frame.Frame) : Translate = struct
     | Nx _ -> failwith "Ill-typed program, tried to unCx a Nx expression"
   ;;
 
-  type level = Top | Nested of (level (* parent *) * F.frame)
+  type nested_level = {
+      parent: level;
+      frame: F.frame;
+      id: unit ref;
+    }
+  and level = Top | Nested of nested_level
+
+  let level_equals level1 level2 = match level1, level2 with
+    | Top, Top -> true
+    | Nested l1, Nested l2 -> phys_equal l1.id l2.id
+    | _, _ -> false
+  ;;
+
   type access = level * F.access
 
   let outermost = Top;;
@@ -69,17 +79,18 @@ module Make (F: Frame.Frame) : Translate = struct
   let newLevel ~parent ~name ~formals = match parent with
     | Nested _ -> begin
         let newframe = F.newFrame ~name:name ~formals:(true :: formals) in
-        Nested (parent, newframe)
+        Nested { parent = parent; frame = newframe; id = ref () }
       end
     | Top -> begin
         let newframe = F.newFrame name formals in
-        Nested (parent, newframe)
+        Nested { parent = parent; frame = newframe; id = ref () }
       end
   ;;
 
   let formals lvl = match lvl with
     | Top -> failwith "Must not call 'formals' on outermost level"
-    | Nested (_, frame) -> begin
+    | Nested l -> begin
+        let frame = l.frame in
         (* check for static link, if present, remove it *)
         match F.formals frame with
         | [] -> [] (* no static link *)
@@ -89,6 +100,24 @@ module Make (F: Frame.Frame) : Translate = struct
 
   let allocLocal lvl escape = match lvl with
     | Top -> failwith "Must not call 'allocLocal' on outermost level"
-    | Nested (parent, frame) -> (lvl, F.allocLocal frame escape)
+    | Nested l -> (lvl, F.allocLocal l.frame escape)
+  ;;
+
+  (* follow up static links to compute the correct offset to access a var *)
+  let rec follow_links curr target exp =
+    match curr with
+    | Nested l -> if level_equals curr target then exp
+      else begin
+        match F.formals l.frame with
+        | sl :: _ -> follow_links l.parent target (F.exp sl exp)
+        | _ -> failwith "Translate: can't follow missing static link"
+      end
+    | Top -> failwith "Translate: reached Top while following sl"
+  ;;
+
+
+  (* access -> level -> exp *)
+  let simpleVar (target, faccess) curr =
+    Ex (F.exp faccess (follow_links target curr (T.TEMP F.fp)))
   ;;
 end

@@ -1,10 +1,6 @@
 module type Translate =
     sig
-      type exp =
-        | Ex of Tree.exp (* expression *)
-        | Nx of Tree.stm (* void expression *)
-        | Cx of (Temp.label -> Temp.label -> Tree.stm) (* conditionals *)
-
+      type exp
       type level
       type access
 
@@ -13,6 +9,8 @@ module type Translate =
         formals:bool list -> level
       val formals: level -> access list
       val allocLocal: level -> bool -> access
+
+      val simpleVar: access -> level -> exp
     end
 
 module Make (F: Frame.Frame) : Translate

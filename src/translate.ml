@@ -2,6 +2,15 @@ open Core.Std
 
 module T = Tree
 
+(* never to be called on an empty list *)
+let rec seq = function
+  | hd :: tl -> begin match tl with
+      | hd2 :: tl2 -> T.SEQ (hd, seq tl)
+      | [] -> hd
+        end
+  | [] -> failwith "Tree.seq failure"
+;;
+
 module type Translate =
     sig
       type exp
@@ -37,7 +46,7 @@ module Make (F: Frame.Frame) : Translate = struct
       let r = Temp.newtemp ()
       and t = Temp.newlabel ()
       and f = Temp.newlabel ()
-      in T.ESEQ (T.seq [
+      in T.ESEQ (seq [
           T.MOVE (T.TEMP r, T.CONST 1);
           fcond t f;
           T.LABEL f;

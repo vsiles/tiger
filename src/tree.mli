@@ -37,6 +37,3 @@ and stm =
   | CJUMP of relop * exp * exp * Temp.label * Temp.label
   | SEQ of stm * stm
   | LABEL of Temp.label
-
-(* transform a list of stm in SEQ sequence *)
-val seq: stm list -> stm

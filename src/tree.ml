@@ -37,12 +37,3 @@ and stm =
   | CJUMP of relop * exp * exp * Temp.label * Temp.label
   | SEQ of stm * stm
   | LABEL of Temp.label
-
-(* never to be called on an empty list *)
-let rec seq = function
-  | hd :: tl -> begin match tl with
-      | hd2 :: tl2 -> SEQ (hd, seq tl)
-      | [] -> hd
-        end
-  | [] -> failwith "Tree.seq failure"
-;;

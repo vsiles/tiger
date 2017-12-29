@@ -1,0 +1,4 @@
+let function test(x: int, y:int) =
+    if x = y then 3 else "4"
+in test(3, 4)
+end

@@ -7,6 +7,7 @@ module type Frame =
         val name: frame -> Temp.label
         val formals: frame -> access list
         val allocLocal: frame -> bool -> access
+        val externalCall : string -> Tree.exp list -> Tree.exp
 
         val fp: Temp.temp
         val wordSize: int

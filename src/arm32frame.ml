@@ -72,4 +72,8 @@ module ARM32Frame : Frame.Frame =
         | InFrame offset -> T.MEM (T.BINOP (T.PLUS, T.CONST offset, addr))
         | InReg temp -> T.TEMP temp
       ;;
+
+
+      (* big TODO *)
+      let externalCall fun_name args = T.CONST 0;;
     end

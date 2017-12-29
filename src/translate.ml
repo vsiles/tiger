@@ -215,6 +215,16 @@ module Make (F: Frame.Frame) : Translate = struct
     | Syntax.Ge -> RelOp T.GE
   ;;
 
+  (* negate an expression *)
+  let negate exp = Cx (fun t f -> T.CJUMP (T.EQ, T.CONST 0, exp, t, f));;
+
+  (* Comparison of strings is done with an external program *)
+  let rec stringOperation op lexp rexp = match op with
+    | T.EQ -> Ex (F.externalCall "stringEqual" [lexp; rexp])
+    | T.NE -> negate (unEx (stringOperation T.EQ lexp rexp))
+    | _ -> failwith "stringOperation must only be called on EQ and NE"
+  ;;
+
   let binOperation op lexp rexp =
     let left_exp = unEx lexp
     and right_exp = unEx rexp in

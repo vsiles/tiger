@@ -69,8 +69,11 @@ type expty = {exp: T.exp; ty: Types.t}
 let transTy tenv = function
     | S.TyName sl -> tenv_find sl tenv
     | S.TyArray sl -> Types.Array (tenv_find sl tenv, Types.new_tag ())
-    | S.TyRecord l -> Types.Record (
-        List.map l (fun f -> (f.S.field_name.L.item, tenv_find f.S.field_type tenv)),
+    | S.TyRecord fields_info ->
+      let sorted_fields = fields_info.S.sorted in
+      Types.Record (
+        List.map sorted_fields
+          ~f:(fun f -> (f.S.field_name.L.item, tenv_find f.S.field_type tenv)),
         Types.new_tag())
 ;;
 
@@ -101,7 +104,7 @@ let lift_ty ty = { exp = T.placeholder; ty = ty };;
 (* Compare Record fields declaration (annoted by Location)
    to be used to sort them during type checking
 
-   To be used with Symbol.t Location.loc * exp Location.loc) list
+   To be used with (Symbol.t Location.loc * exp Location.loc) list
 *)
 let field_loc_cmp field_def1 field_def2 =
   let name1 = fst field_def1 in
@@ -271,13 +274,14 @@ let rec transExp level allow_break venv tenv exp =
             let recty = tenv_find sl tenv in begin
             match recty with
             | Types.Record (fields, _) -> begin
-                List.iter2_exn fields sorted_fl (fun (fname, ftyp) (name, body) ->
-                    if Symbol.equal fname name.L.item then
-                      let _ = check_ty ftyp body in () (* TODO FIXME *)
-                    else
-                      name_error name.L.loc
-                      @@ sprintf "Wrong field %s: expected %s"
-                        (Symbol.name name.L.item) (Symbol.name fname))
+                List.iter2_exn fields sorted_fl
+                  ~f:(fun (fname, ftyp) (name, body) ->
+                      if Symbol.equal fname name.L.item then
+                        let _ = check_ty ftyp body in () (* TODO FIXME *)
+                      else
+                        name_error name.L.loc
+                        @@ sprintf "Wrong field %s: expected %s"
+                          (Symbol.name name.L.item) (Symbol.name fname))
               end
             | _ -> type_error sl.L.loc @@
               sprintf "%s is not of Record type" (Symbol.name sl.L.item)

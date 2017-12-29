@@ -38,7 +38,7 @@ let rec traverseExp env depth exp =
         end
       | S.While (condl, bodyl) -> begin traverse condl; traverse bodyl; end
       | S.For (sym, esc, froml, tol, bodyl) ->
-          let _ = printf "FindEscape: For loop at depth %d\n" depth in
+(*          let _ = printf "FindEscape: For loop at depth %d\n" depth in
           let env' = Symbol.Table.add env ~key:sym ~data:(depth, esc) in
             traverse froml;
             traverse tol;

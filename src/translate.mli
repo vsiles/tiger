@@ -16,6 +16,8 @@ module type Translate =
       val intConst: int -> exp
       val binOperation : Syntax.op -> exp -> exp -> exp
       val nil: exp
+      val unit: exp
+      val ifthenelse : exp -> exp -> exp -> exp
 
       val placeholder: exp
 

@@ -29,6 +29,8 @@ module type Translate =
       val intConst: int -> exp
       val binOperation : Syntax.op -> exp -> exp -> exp
       val nil: exp
+      val unit: exp
+      val ifthenelse : exp -> exp -> exp -> exp
 
       val placeholder: exp
 
@@ -223,4 +225,26 @@ module Make (F: Frame.Frame) : Translate = struct
   ;;
 
   let nil = Ex (T.CONST 0);;
+  let unit = Nx (T.EXP (T.CONST 0));;
+
+  let ifthenelse test_exp true_exp false_exp =
+    let test = unCx test_exp
+    and true_body = unEx true_exp
+    and false_body = unEx false_exp in
+
+    let result = Temp.newtemp ()
+    and label_true = Temp.newlabel ()
+    and label_false = Temp.newlabel ()
+    and label_join = Temp.newlabel () in
+
+    (* First draft, very basic, needs improvement *)
+    Ex (T.ESEQ (seq [ test label_true  label_false;
+                      T.LABEL label_true;
+                      T.MOVE (T.TEMP result, true_body);
+                      T.JUMP (T.NAME label_join, [label_join]);
+                      T.LABEL label_false;
+                      T.MOVE (T.TEMP result, false_body);
+                      T.JUMP (T.NAME label_join, [label_join]);
+                      T.LABEL label_join], T.TEMP result))
+  ;;
 end

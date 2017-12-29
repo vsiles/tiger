@@ -310,17 +310,23 @@ let rec transExp level allow_break venv tenv exp =
               sprintf "Not an array type: %s" (Types.to_string arrty)
           end
         )
-      | S.If (testl, thenl, oelsel) -> (
-          let thentyexp = trExp thenl in
-          (* TODO check_int *)
-          let _ = check_int testl in
+      | S.If (testl, thenl, oelsel) -> begin
+          let testexp = check_int testl in
           begin match oelsel with
-            | None -> ()
-            | Some elsel -> ((* TODO FIXME *)
-                let _ = check_ty thentyexp.ty elsel in ()
-              )
-          end; thentyexp
-        )
+            | None -> (* then then branch my be of type unit *)
+              let thenexp = check_ty Types.Unit thenl in
+              { exp = T.ifthenelse testexp.exp thenexp.exp T.unit;
+                ty = Types.Unit
+              }
+            | Some elsel ->
+              let thenexp = trExp thenl in
+              let elseexp = check_ty thenexp.ty elsel in
+              {
+                exp = T.ifthenelse testexp.exp thenexp.exp elseexp.exp;
+                ty = thenexp.ty
+              }
+          end
+        end
       | S.While (condl, bodyl) -> (
           (* TODO check_int *)
           let _ = check_int condl in

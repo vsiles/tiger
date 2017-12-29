@@ -41,15 +41,20 @@ let suite =
         ["queens">:: test_queens]
 ;;
 *)
+
+let filter_tig name = Filename.check_suffix name ".tig";;
+
 let () =
-    let good_tests = Array.to_list (Sys.readdir "./tests/good") in
-    let bad_tests = Array.to_list (Sys.readdir "./tests/bad") in
+    let good_tests = Array.to_list (Sys.readdir "./tests/good/") in
+    let bad_tests = Array.to_list (Sys.readdir "./tests/bad/") in
+    let good_tigs = List.filter good_tests ~f:filter_tig in
+    let bad_tigs = List.filter bad_tests ~f:filter_tig in
     let tests1 = List.fold_left
-        good_tests
+        good_tigs
         ~f:(fun tl hd -> (hd>:: (test_good hd)) :: tl)
         ~init:[] in
     let tests2 = List.fold_left
-        bad_tests
+        bad_tigs
         ~f:(fun tl hd -> (hd>:: (test_bad hd)) :: tl)
         ~init:tests1 in
     let suite = "full suite">::: tests2 in

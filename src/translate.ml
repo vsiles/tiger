@@ -234,20 +234,33 @@ module Make (F: Frame.Frame) : Translate = struct
     and else_body = unEx else_exp in
 
     let result = Temp.newtemp ()
-    and label_true = Temp.newlabel ()
-    and label_false = Temp.newlabel ()
+    and label_then = Temp.newlabel ()
+    and label_else = Temp.newlabel ()
     and label_join = Temp.newlabel () in
 
     match test', then_exp, else_exp with
     (* First check if the test is not trivially true/false *)
     | T.CONST 0, _, _ -> else_exp
     | T.CONST _, _, _ -> then_exp
+    (* Special cases to deal with & and | that we translated into if/then/else *)
+    |  _, Cx _, Ex (T.CONST 0) -> (* & case *)
+      Cx (fun t f ->
+          seq [test label_then f;
+               T.LABEL label_then;
+               (unCx then_exp) t f]
+        )
+    | (_, Ex (T.CONST 1), Cx _) -> (* | case *)
+      Cx (fun t f ->
+          seq [test t label_else;
+               T.LABEL label_else;
+               (unCx else_exp) t f]
+        )
     | _, _, _ ->
-      Ex (T.ESEQ (seq [ test label_true  label_false;
-                        T.LABEL label_true;
+      Ex (T.ESEQ (seq [ test label_then  label_else;
+                        T.LABEL label_then;
                         T.MOVE (T.TEMP result, then_body);
                         T.JUMP (T.NAME label_join, [label_join]);
-                        T.LABEL label_false;
+                        T.LABEL label_else;
                         T.MOVE (T.TEMP result, else_body);
                         T.JUMP (T.NAME label_join, [label_join]);
                         T.LABEL label_join], T.TEMP result))

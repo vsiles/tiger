@@ -368,48 +368,49 @@ let rec transExp level allow_break venv tenv exp =
             ret
 
     (* trLValue: S.lvalue location -> expty * bool *)
-    and trLValue var =
-    match var.L.item with
+    and trLValue var = match var.L.item with
       | S.VarId sl -> begin
           match venv_find sl venv with
           | E.VarEntry (access, ty, assign) ->
-(*            printf "\nProcessing %s\n" (Symbol.name sl.L.item); *)
+            (* printf "\nProcessing %s\n" (Symbol.name sl.L.item); *)
             { exp = T.simpleVar access level; ty = ty}, assign
           | E.FunEntry _ ->
             type_error sl.L.loc @@
             sprintf "%s is a function, expected a variable" (Symbol.name sl.L.item)
         end
-    | S.FieldAccess (vl, sl) -> (
-        let field = sl.L.item in
-        let struct_exp = fst @@ trLValue vl in
-        let ty = struct_exp.ty in
-        match ty with
-        | Types.Record r -> (
-            try
-              let fields = r.Types.fields in
-              let orig = r.Types.orig in
-              let final_ty = List.Assoc.find_exn fields field in
-              { exp = T.fieldAccess struct_exp.exp field orig;
-                ty = final_ty }, true
-            with Not_found -> name_error sl.L.loc @@
-              sprintf "Unknown field %s for record %s"
-                (Symbol.name field) (Types.to_string ty)
-          )
-        | _ -> type_error vl.L.loc @@
-          sprintf "%s is not of Record type" (Types.to_string ty)
-      )
-    | S.ArrayAccess (vl, el) -> (
-        let arr_exp = fst @@ trLValue vl in
-        let ty = arr_exp.ty in
-        match ty with
-            | Types.Array (typ, _) -> (
+      | S.FieldAccess (vl, sl) -> (
+          let field = sl.L.item in
+          (* TODO: add compile type check to rule out NPE when possible *)
+          let struct_exp = fst @@ trLValue vl in
+          let ty = struct_exp.ty in
+          match ty with
+          | Types.Record r -> (
+              try
+                let fields = r.Types.fields in
+                let orig = r.Types.orig in
+                let final_ty = List.Assoc.find_exn fields field in
+                { exp = T.fieldAccess struct_exp.exp field orig;
+                  ty = final_ty }, true
+              with Not_found -> name_error sl.L.loc @@
+                sprintf "Unknown field %s for record %s"
+                  (Symbol.name field) (Types.to_string ty)
+            )
+          | _ -> type_error vl.L.loc @@
+            sprintf "%s is not of Record type" (Types.to_string ty)
+        )
+      | S.ArrayAccess (vl, el) -> (
+          (* TODO: add compile type check to rule out NPE when possible *)
+          let arr_exp = fst @@ trLValue vl in
+          let ty = arr_exp.ty in
+          match ty with
+          | Types.Array (typ, _) -> (
               let ndx = check_int el in
               let texp = T.arrayAccess arr_exp.exp ndx.exp in
               { exp = texp; ty = typ }, true
             )
-            | _ -> type_error vl.L.loc @@
-                    sprintf "%s is not of Array type" (Types.to_string ty)
-    )
+          | _ -> type_error vl.L.loc @@
+            sprintf "%s is not of Array type" (Types.to_string ty)
+        )
 in trExp exp
 
 (* transDecs: Translate.level -> venv -> tenv -> S.dec list -> (venv * tenv) *)

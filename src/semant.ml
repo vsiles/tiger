@@ -397,9 +397,9 @@ and transDec level venv tenv = function
               ~data:(E.FunEntry (newlvl, name, tylist, retty)))
         ~init:venv in
     (* then parse each body with all headers in the environment *)
-    List.fold_left fun_and_header_list
-      ~f:(fun venv_acc fundec_and_header -> trans_fun venv_acc tenv fundec_and_header)
-      ~init:venv', tenv
+    List.iter fun_and_header_list
+      ~f:(fun fundec_and_header -> trans_fun venv' tenv fundec_and_header);
+      venv', tenv
   | S.TypeDec typlist ->
     let dummy_loc = match typlist with | hd :: _ -> hd.L.loc | [] -> L.dummy_loc in
     if check_typdec_shadowing typlist
@@ -429,20 +429,22 @@ and trans_typ tenv ltypdec =
   Symbol.Table.add tenv ~key:type_name.L.item ~data:(transTy tenv typ)
 
 and trans_fun venv tenv (lfundec, (argsty, retty), name, level) =
+(*  let _ = printf "Translating %s\n" (Symbol.name lfundec.L.item.S.fun_name.L.item) in *)
   let fundec = lfundec.L.item in
   let venv' = List.fold_left argsty
       ~f:(fun venv_acc (name, ty, escp) ->
           let access = T.allocLocal level escp in
+(*          let _ = printf "Adding new argument %s\n" (Symbol.name name.L.item) in *)
             Symbol.Table.add venv_acc
               (* Can't assign variable that are input variable of a function *)
               ~key:name.L.item ~data:(E.VarEntry (access, ty, false)))
       ~init:venv in
   let body_tyexp = transExp level false venv' tenv fundec.S.body in
+(*  let _ = printf "Done\n" in  *)
   if not @@ phys_equal body_tyexp.ty retty then
       type_error lfundec.L.loc @@
       sprintf "The body of this function is of type %s, not %s"
         (Types.to_string body_tyexp.ty) (Types.to_string retty)
-  else venv'
 ;;
 
 (* transProg: Syntax.exp -> unit *)

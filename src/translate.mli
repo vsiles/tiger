@@ -12,6 +12,7 @@ module type Translate =
 
       val simpleVar: access -> level -> exp
       val arrayAccess: exp -> exp -> exp
+      val fieldAccess: exp -> Symbol.t -> Symbol.t list -> exp
 
       val placeholder: exp
 

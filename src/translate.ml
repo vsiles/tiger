@@ -25,6 +25,7 @@ module type Translate =
 
       val simpleVar: access -> level -> exp
       val arrayAccess: exp -> exp -> exp
+      val fieldAccess: exp -> Symbol.t -> Symbol.t list -> exp
 
       val placeholder: exp
 
@@ -157,16 +158,38 @@ module Make (F: Frame.Frame) : Translate = struct
     Ex (F.exp faccess (follow_links curr target (T.TEMP F.fp)))
   ;;
 
+  let base_n_offset_builder base offset size =
+    let n = T.BINOP (T.MUL, offset, size) in
+    T.BINOP (T.PLUS, base, n)
+  ;;
+
   (* TODO: add the size of the array to the variable declaration so
            we can do bound checking *)
   (* TODO: add simplification of the size, if possible, to detect
            out of bound at compile time if possible *)
   (* exp -> exp -> exp *)
   let arrayAccess arr ndx =
-    let tarr = unEx arr in
-    let tndx = unEx ndx in
-    let offset = T.BINOP (T.MUL, tndx, T.CONST (F.wordSize)) in
-    let loc = T.BINOP (T.PLUS, tarr, offset) in
-    Ex (T.MEM loc)
+    let tarr = unEx arr
+    and tndx = unEx ndx in
+    Ex (T.MEM (base_n_offset_builder tarr tndx (T.CONST (F.wordSize))))
+  ;;
+
+  (* find the ndx of a symbol in a list *)
+  let rec lfind_pos x pos = function
+    | [] -> None
+    | hd :: tl ->
+      if Symbol.equal x hd
+      then Some pos
+      else lfind_pos x (pos + 1) tl
+  ;;
+
+  (* TODO: add NPE check *)
+  (* pre-condition: the provided field must be in the field list *)
+  let fieldAccess base field fields =
+    let pos = match lfind_pos field 0 fields with
+      | None -> failwith "precondition of fieldAccess violated"
+      | Some n -> T.CONST n
+    and tbase = unEx base in
+    Ex (T.MEM (base_n_offset_builder tbase pos (T.CONST (F.wordSize))))
   ;;
 end

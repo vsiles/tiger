@@ -380,14 +380,20 @@ let rec transExp level allow_break venv tenv exp =
             sprintf "%s is a function, expected a variable" (Symbol.name sl.L.item)
         end
     | S.FieldAccess (vl, sl) -> (
-        let ty = (fst @@ trLValue vl).ty in
+        let field = sl.L.item in
+        let struct_exp = fst @@ trLValue vl in
+        let ty = struct_exp.ty in
         match ty with
         | Types.Record r -> (
-            let fields = r.Types.fields in
-            try lift_ty (List.Assoc.find_exn fields sl.L.item), true
+            try
+              let fields = r.Types.fields in
+              let orig = r.Types.orig in
+              let final_ty = List.Assoc.find_exn fields field in
+              { exp = T.fieldAccess struct_exp.exp field orig;
+                ty = final_ty }, true
             with Not_found -> name_error sl.L.loc @@
               sprintf "Unknown field %s for record %s"
-                (Symbol.name sl.L.item) (Types.to_string ty)
+                (Symbol.name field) (Types.to_string ty)
           )
         | _ -> type_error vl.L.loc @@
           sprintf "%s is not of Record type" (Types.to_string ty)

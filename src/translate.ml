@@ -229,9 +229,7 @@ module Make (F: Frame.Frame) : Translate = struct
 
   let ifthenelse test_exp then_exp else_exp =
     let test = unCx test_exp
-    and test' = unEx test_exp
-    and then_body = unEx then_exp
-    and else_body = unEx else_exp in
+    and test' = unEx test_exp in
 
     let result = Temp.newtemp ()
     and label_then = Temp.newlabel ()
@@ -249,20 +247,40 @@ module Make (F: Frame.Frame) : Translate = struct
                T.LABEL label_then;
                (unCx then_exp) t f]
         )
-    | (_, Ex (T.CONST 1), Cx _) -> (* | case *)
+    | _, Ex (T.CONST 1), Cx _ -> (* | case *)
       Cx (fun t f ->
           seq [test t label_else;
                T.LABEL label_else;
                (unCx else_exp) t f]
         )
+    (* If the then/else bodies are conditionals too, avoid a label mess *)
+    | _, Cx _, _ ->
+      Cx (fun t f ->
+          seq [test label_then label_else;
+               T.LABEL label_then;
+               (unCx then_exp) t  f;
+               T.LABEL label_else;
+               (unCx else_exp) t f]
+        )
+    (* If the then/else bodies are units, don't bother with computing a result *)
+    | _, Nx _, _ ->
+      Nx (seq [test label_then label_else;
+               T.LABEL label_then;
+               unNx then_exp;
+               T.JUMP (T.NAME label_join, [label_join]);
+               T.LABEL label_else;
+               unNx else_exp;
+               T.LABEL label_join]
+         )
     | _, _, _ ->
       Ex (T.ESEQ (seq [ test label_then  label_else;
                         T.LABEL label_then;
-                        T.MOVE (T.TEMP result, then_body);
+                        T.MOVE (T.TEMP result, unEx then_exp);
                         T.JUMP (T.NAME label_join, [label_join]);
                         T.LABEL label_else;
-                        T.MOVE (T.TEMP result, else_body);
+                        T.MOVE (T.TEMP result, unEx else_exp);
                         T.JUMP (T.NAME label_join, [label_join]);
                         T.LABEL label_join], T.TEMP result))
+
   ;;
 end

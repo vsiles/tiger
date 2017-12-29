@@ -231,7 +231,10 @@ let rec transExp level allow_break venv tenv exp =
                        ~f:(fun _ el -> trExp el)
                        ~init:(lift_ty Types.Unit)
       | S.Int n -> { exp = T.intConst n.L.item; ty = Types.Int }
-      | S.String _ -> lift_ty Types.String
+      | S.String sl -> {
+          exp = T.string sl.L.item;
+          ty = Types.String
+        }
       | S.FunCall (sl, ell) -> (
           let (argsty, retty) = (match fenv_find sl venv with
               | E.FunEntry (_, _, tylist, ty) -> (tylist, ty)

@@ -18,6 +18,8 @@ module ARM32Frame : Frame.Frame =
       let wordSize = 4
       let fp = Temp.newtemp()
 
+      type frag = STRING of Temp.label * string
+
       let numArgRegs = 4
       type access = InFrame of int | InReg of Temp.temp
       type frame = {

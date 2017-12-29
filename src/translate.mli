@@ -18,6 +18,7 @@ module type Translate =
       val nil: exp
       val unit: exp
       val ifthenelse : exp -> exp -> exp -> exp
+      val string : string -> exp
 
       val placeholder: exp
 

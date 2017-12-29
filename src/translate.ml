@@ -31,6 +31,7 @@ module type Translate =
       val nil: exp
       val unit: exp
       val ifthenelse : exp -> exp -> exp -> exp
+      val string : string -> exp
 
       val placeholder: exp
 
@@ -292,5 +293,22 @@ module Make (F: Frame.Frame) : Translate = struct
                         T.JUMP (T.NAME label_join, [label_join]);
                         T.LABEL label_join], T.TEMP result))
 
+  ;;
+
+  (* String declaration *)
+  let frags : F.frag list ref = ref [];;
+
+  let string str =
+    let some_label =
+      List.find (!frags) (fun f -> match f with
+          | F.STRING (lbl, str') -> Pervasives.compare str str' = 0
+        ) in
+    let label = match some_label with
+      | Some (F.STRING (l, _)) -> l
+(*      | Some _ -> failwith "Failure in Translate.string" *)
+      | None -> let l = Temp.newlabel() in
+        frags := F.STRING (l, str) :: (!frags);
+        l
+    in Ex (T.NAME label)
   ;;
 end

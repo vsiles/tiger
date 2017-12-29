@@ -12,4 +12,6 @@ module type Frame =
         val fp: Temp.temp
         val wordSize: int
         val exp: access -> Tree.exp -> Tree.exp
+
+        type frag = STRING of Temp.label * string
     end

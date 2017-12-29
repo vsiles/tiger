@@ -38,7 +38,6 @@ let rec traverseExp env depth exp =
         end
       | S.While (condl, bodyl) -> begin traverse condl; traverse bodyl; end
       | S.For (sym, esc, froml, tol, bodyl) ->
-(*          let _ = printf "FindEscape: For loop at depth %d\n" depth in
           let env' = Symbol.Table.add env ~key:sym ~data:(depth, esc) in
             traverse froml;
             traverse tol;
@@ -52,11 +51,7 @@ let rec traverseExp env depth exp =
     and traverseVar var = match var.L.item with
       | S.VarId sl ->
         let (decl_depth, esc) = env_find sl env in
-        if decl_depth < depth then (
-          printf "Flipping %s at level %d (was %d)\n"
-                 (Symbol.name sl.L.item)
-                 depth decl_depth;
-        esc :=  true ) else ()
+        if decl_depth < depth then esc := true else ()
       | S.FieldAccess (vl, _) -> traverseVar vl
       | S.ArrayAccess (vl, el) -> begin
           traverseVar vl;

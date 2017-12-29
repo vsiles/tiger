@@ -24,6 +24,11 @@ module type Translate =
       val allocLocal: level -> bool -> access
 
       val simpleVar: access -> level -> exp
+      val arrayAccess: exp -> exp -> exp
+
+      val placeholder: exp
+
+(*      val pp_access: access -> unit *)
     end
 
 module Make (F: Frame.Frame) : Translate = struct
@@ -33,6 +38,8 @@ module Make (F: Frame.Frame) : Translate = struct
     | Nx of T.stm (* void expression *)
     | Cx of (Temp.label -> Temp.label -> T.stm) (* conditionals *)
 
+
+  let placeholder = Ex (T.CONST 0)
 
   let unEx = function
     | Ex e -> e
@@ -82,17 +89,27 @@ module Make (F: Frame.Frame) : Translate = struct
   ;;
 
   type access = level * F.access
+(*
+  let pp_access (lvl, _) =
+    let s = match lvl with | Top -> "Top" | Nested l -> Symbol.name @@ F.name l.frame in
+    printf "<%s>\n" s
+  ;;
+*)
 
   let outermost = Top;;
 
   let newLevel ~parent ~name ~formals = match parent with
     | Nested _ -> begin
         let newframe = F.newFrame ~name:name ~formals:(true :: formals) in
-        Nested { parent = parent; frame = newframe; id = ref () }
+        let ret = Nested { parent = parent; frame = newframe; id = ref () } in
+(*        printf "\nnewLevel %s 0x%x\n" (Symbol.name name) (2 * (Obj.magic ret)); *)
+        ret
       end
     | Top -> begin
         let newframe = F.newFrame name formals in
-        Nested { parent = parent; frame = newframe; id = ref () }
+        let ret = Nested { parent = parent; frame = newframe; id = ref () } in
+(*        printf "\nnewLevel %s 0x%x\n" (Symbol.name name) (2 * (Obj.magic ret)); *)
+        ret
       end
   ;;
 
@@ -114,6 +131,11 @@ module Make (F: Frame.Frame) : Translate = struct
 
   (* follow up static links to compute the correct offset to access a var *)
   let rec follow_links curr target exp =
+(*    let p1 = 2 * (Obj.magic curr) in *)
+(*    let n1 = match curr with | Top -> "Top" | Nested l -> Symbol.name @@ F.name l.frame in *)
+(*    let p2 = 2 * (Obj.magic target) in *)
+(*    let n2 = match target with | Top -> "Top" | Nested l -> Symbol.name @@ F.name l.frame in *)
+(*    printf "follow_links %s %s (0x%x 0x%x)\n" n1 n2 p1 p2; *)
     match curr with
     | Nested l -> if level_equals curr target then exp
       else begin
@@ -127,6 +149,24 @@ module Make (F: Frame.Frame) : Translate = struct
 
   (* access -> level -> exp *)
   let simpleVar (target, faccess) curr =
-    Ex (F.exp faccess (follow_links target curr (T.TEMP F.fp)))
+(*    let p1 = 2 * (Obj.magic curr) in *)
+(*    let n1 = match curr with | Top -> "Top" | Nested l -> Symbol.name @@ F.name l.frame in *)
+(*    let p2 = 2 * (Obj.magic target) in *)
+(*    let n2 = match target with | Top -> "Top" | Nested l -> Symbol.name @@ F.name l.frame in *)
+(*    printf "simpleVar %s %s (0x%x 0x%x)\n" n1 n2 p1 p2; *)
+    Ex (F.exp faccess (follow_links curr target (T.TEMP F.fp)))
+  ;;
+
+  (* TODO: add the size of the array to the variable declaration so
+           we can do bound checking *)
+  (* TODO: add simplification of the size, if possible, to detect
+           out of bound at compile time if possible *)
+  (* exp -> exp -> exp *)
+  let arrayAccess arr ndx =
+    let tarr = unEx arr in
+    let tndx = unEx ndx in
+    let offset = T.BINOP (T.MUL, tndx, T.CONST (F.wordSize)) in
+    let loc = T.BINOP (T.PLUS, tarr, offset) in
+    Ex (T.MEM loc)
   ;;
 end

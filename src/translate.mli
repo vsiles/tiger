@@ -11,6 +11,11 @@ module type Translate =
       val allocLocal: level -> bool -> access
 
       val simpleVar: access -> level -> exp
+      val arrayAccess: exp -> exp -> exp
+
+      val placeholder: exp
+
+(*      val pp_access: access -> unit *)
     end
 
 module Make (F: Frame.Frame) : Translate

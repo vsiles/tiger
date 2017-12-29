@@ -26,6 +26,32 @@ let env_find env_name sym env =
       env_name
       (Symbol.name sym.L.item)
 
+(*
+   (* Debug code to print the content of venv *)
+let avoid = [ "print";
+              "flush";
+              "getchar";
+              "ord";
+              "chr";
+              "size";
+              "substring";
+              "concat";
+              "not";
+              "exit"];;
+
+let env_pp env =
+  Symbol.Table.iteri env
+    ~f:(fun ~key ~data -> let n = Symbol.name key in
+         if List.mem avoid n then () else begin
+           printf "%s: " n;
+         match data with
+         | E.FunEntry _ -> printf "<fun>\n"
+         | E.VarEntry (access, _, _) -> T.pp_access access
+         end
+       )
+;;
+*)
+
 (* Symbol.Table.t -> venv -> Env.entry *)
 let venv_find = env_find "value"
 (* Symbol.Table.t -> venv -> Env.entry *)
@@ -70,7 +96,7 @@ let trans_fun_sig tenv lfundec =
 ;;
 
 (* temp function *)
-let lift_ty ty = { exp = (); ty = ty };;
+let lift_ty ty = { exp = T.placeholder; ty = ty };;
 
 (* Compare Record fields declaration (annoted by Location)
    to be used to sort them during type checking
@@ -169,11 +195,14 @@ let fix_name_ty tenv =
 (* Note: tenv must not have Types.Name(None) entries *)
 let rec transExp level allow_break venv tenv exp =
   let rec check_ty ty exp =
-    let ty' = (trExp exp).ty in
+    let texp = trExp exp in
+    let ty' = texp.ty in
     if not @@ Types.compat ty ty'
     then type_error exp.L.loc @@
       sprintf "%s expected, found %s"
         (Types.to_string ty) (Types.to_string ty')
+    else
+      texp
 
     and check_int exp = check_ty Types.Int exp
 
@@ -188,7 +217,7 @@ let rec transExp level allow_break venv tenv exp =
         *)
         | S.Seq ell -> List.fold_left ell
                          ~f:(fun _ el -> trExp el)
-                         ~init:{ exp = (); ty = Types.Unit }
+                         ~init:(lift_ty Types.Unit)
         | S.Int _ -> lift_ty Types.Int
         | S.String _ -> lift_ty Types.String
         | S.FunCall (sl, ell) -> (
@@ -198,7 +227,8 @@ let rec transExp level allow_break venv tenv exp =
                   type_error sl.L.loc @@
                   sprintf "%s is a variable, expected a function"
                     (Symbol.name sl.L.item)
-            ) in (List.iter2_exn argsty ell check_ty; lift_ty retty)
+              ) in (List.iter2_exn argsty ell
+                      (* TODO FIXME *) (fun x y -> let _ = check_ty x y in ()); lift_ty retty)
         )
         | S.BinOp (el1, opl, el2) -> (
             let expty1 = trExp el1 in
@@ -229,7 +259,11 @@ let rec transExp level allow_break venv tenv exp =
                       (Types.to_string expty1.ty) (Types.to_string expty2.ty)
                   else lift_ty Types.Int
               end
-            | _ -> (check_int el1; check_int el2; lift_ty Types.Int)
+            | _ -> (
+                (* TODO check_int *)
+                let _ = check_int el1 in
+                let _ =  check_int el2 in
+                lift_ty Types.Int)
           )
         | S.Record (sl, fl) -> (
             (* sort field def to easily compare with sorted Record def *)
@@ -239,7 +273,7 @@ let rec transExp level allow_break venv tenv exp =
             | Types.Record (fields, _) -> begin
                 List.iter2_exn fields sorted_fl (fun (fname, ftyp) (name, body) ->
                     if Symbol.equal fname name.L.item then
-                      check_ty ftyp body
+                      let _ = check_ty ftyp body in () (* TODO FIXME *)
                     else
                       name_error name.L.loc
                       @@ sprintf "Wrong field %s: expected %s"
@@ -250,7 +284,8 @@ let rec transExp level allow_break venv tenv exp =
           end; lift_ty recty
           )
         | S.Array (sl, sizel, initl) -> (
-            check_int sizel;
+            (* TODO check_int *)
+            let _ = check_int sizel in
             let init_tyexp = trExp initl in
             let arrty = tenv_find sl tenv in
             begin match arrty with
@@ -268,14 +303,18 @@ let rec transExp level allow_break venv tenv exp =
           )
         | S.If (testl, thenl, oelsel) -> (
             let thentyexp = trExp thenl in
-            check_int testl;
+            (* TODO check_int *)
+            let _ = check_int testl in
             begin match oelsel with
                 | None -> ()
-                | Some elsel -> (check_ty thentyexp.ty elsel)
+                | Some elsel -> ((* TODO FIXME *)
+                    let _ = check_ty thentyexp.ty elsel in ()
+                  )
             end; thentyexp
         )
         | S.While (condl, bodyl) -> (
-            check_int condl;
+            (* TODO check_int *)
+            let _ = check_int condl in
             let ty = (transExp level true venv tenv bodyl).ty in
             if not @@ Types.compat ty Types.Unit
             then type_error exp.L.loc @@
@@ -285,8 +324,8 @@ let rec transExp level allow_break venv tenv exp =
         )
         | S.For (sym, escp, froml, tol, bodyl) -> (
             (* adding the index to venv, as 'RO' so we can't assign it in the source *)
-            let _ = printf "allocLocal for loop variable %s\n" (Symbol.name sym); flush_all() in
             let access = T.allocLocal level !escp in
+(*            let _ = printf "Adding loop index %s" (Symbol.name sym) in *)
             let venv' = Symbol.Table.add venv ~key:sym
                 ~data:(E.VarEntry (access, Types.Int, false))  in
             let ty = (transExp level true venv' tenv bodyl).ty in
@@ -294,7 +333,12 @@ let rec transExp level allow_break venv tenv exp =
             then type_error exp.L.loc @@
                 sprintf "The body of a For loop must be of Unit type, found %s"
                 (Types.to_string ty)
-            else (check_int froml; check_int tol; lift_ty Types.Unit)
+                (* TODO check_int *)
+            else begin
+              let _ = check_int froml in
+              let _ = check_int tol in
+              lift_ty Types.Unit
+            end
           )
         | S.Break _ -> if allow_break then lift_ty Types.Unit
           else type_error exp.L.loc "Found 'break' instruction outside of For/While loop"
@@ -302,20 +346,29 @@ let rec transExp level allow_break venv tenv exp =
             let ret = lift_ty Types.Unit in
             let vartyexp, assign = trLValue vl in
             let varty = vartyexp.ty in
-            if assign then (check_ty varty el; ret)
+            if assign then ((* TODO FIXME *)
+              let _ = check_ty varty el in ret)
             else type_error exp.L.loc @@
               sprintf "Assigning a RO variable is forbidden (For loop index, function argument)"
         )
         | S.Let (decl, el) ->
+(*            let _ = printf "Translating Let block\n" in *)
+(*             let _ = env_pp venv in *)
             let venv', tenv' = transDecs level venv tenv decl in
-            transExp level allow_break venv' tenv' el
+(*            let _ = printf "Translating Let body\n" in *)
+(*            let _ = env_pp venv' in *)
+            let ret = transExp level allow_break venv' tenv' el in
+(*            let _ = printf "Done Translating Let\n" in *)
+            ret
 
     (* trLValue: S.lvalue location -> expty * bool *)
     and trLValue var =
     match var.L.item with
       | S.VarId sl -> begin
           match venv_find sl venv with
-          | E.VarEntry (_, ty, assign) -> lift_ty ty, assign
+          | E.VarEntry (access, ty, assign) ->
+(*            printf "\nProcessing %s\n" (Symbol.name sl.L.item); *)
+            { exp = T.simpleVar access level; ty = ty}, assign
           | E.FunEntry _ ->
             type_error sl.L.loc @@
             sprintf "%s is a function, expected a variable" (Symbol.name sl.L.item)
@@ -333,11 +386,13 @@ let rec transExp level allow_break venv tenv exp =
                     sprintf "%s is not of Record type" (Types.to_string ty)
         )
     | S.ArrayAccess (vl, el) -> (
-        let ty = (fst @@ trLValue vl).ty in
+        let arr_exp = fst @@ trLValue vl in
+        let ty = arr_exp.ty in
         match ty with
             | Types.Array (typ, _) -> (
-                check_int el;
-                lift_ty typ, true
+              let ndx = check_int el in
+              let texp = T.arrayAccess arr_exp.exp ndx.exp in
+              { exp = texp; ty = typ }, true
             )
             | _ -> type_error vl.L.loc @@
                     sprintf "%s is not of Array type" (Types.to_string ty)
@@ -372,6 +427,7 @@ and transDec level venv tenv = function
             | _ -> ()
         end
       end;
+(*      let _ = printf "Adding new let variable %s\n" (Symbol.name var.S.var_name.L.item) in *)
       Symbol.Table.add venv
         ~key:var.S.var_name.L.item
         ~data:(E.VarEntry (access, tyexp.ty, true)), tenv
@@ -383,6 +439,7 @@ and transDec level venv tenv = function
         funlist
         ~f:(fun lfundec acc ->
             let argsty,esclist,retty = trans_fun_sig tenv lfundec in
+(*            let _ = printf "\nNew function %s" (Symbol.name lfundec.L.item.S.fun_name.L.item) in *)
             let name = Temp.newlabel() in
             let newlvl = T.newLevel ~parent:level ~name ~formals:esclist in
             (lfundec, (argsty, retty), name, newlvl) :: acc)

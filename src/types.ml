@@ -24,11 +24,17 @@ let new_tag =
 type t =
     | Int
     | String
-    | Record of (Symbol.t * t) list * tag
+    | Record of record
     | Array of t * tag
     | Nil
     | Unit
     | Name of Symbol.t * t option ref
+and record = {
+  orig: Symbol.t list;          (* original order of the fields name *)
+  fields: (Symbol.t * t) list;  (* sorted fields + types *)
+  tag: tag
+}
+
 
 let rec unroll = function
     | Name (symbol, opt) -> (
@@ -51,7 +57,7 @@ let rec compat t1 t2 =
   match ut1, ut2 with
   | Record _, Nil
   | Nil, Record _ -> true
-  | Record (_, tag1), Record (_, tag2)
+  | Record r1, Record r2 -> Pervasives.compare r1.tag r2.tag = 0
   | Array (_, tag1), Array (_, tag2) -> Pervasives.compare tag1 tag2 = 0
   | Int, Int
   | String, String
@@ -81,7 +87,7 @@ let eq_compat t1 t2 =
 let rec to_string = function
     | Int -> "int"
     | String -> "string"
-    | Record (l, n) -> sprintf "Record %d: { %s }" n (to_string_list l)
+    | Record r -> sprintf "Record %d: { %s }" r.tag (to_string_list r)
     | Array (t, n) -> sprintf "Array %s %d" (to_string t) n
     | Nil -> "nil"
     | Unit -> "unit"
@@ -91,7 +97,7 @@ let rec to_string = function
         | None -> sprintf "%s (None)" (Symbol.name sym)
       end
 
-and to_string_list = function
+and to_string_list r = match r.fields with
     | [] -> ""
     | (s, t) :: [] -> (Symbol.name s)^" : "^(to_string t)
     | (s, t) :: tl -> List.fold_left tl

@@ -70,11 +70,12 @@ let transTy tenv = function
     | S.TyName sl -> tenv_find sl tenv
     | S.TyArray sl -> Types.Array (tenv_find sl tenv, Types.new_tag ())
     | S.TyRecord fields_info ->
-      let sorted_fields = fields_info.S.sorted in
-      Types.Record (
-        List.map sorted_fields
-          ~f:(fun f -> (f.S.field_name.L.item, tenv_find f.S.field_type tenv)),
-        Types.new_tag())
+      let names = fields_info.S.orig
+      and fields = fields_info.S.sorted in
+      let sorted_fields =
+        List.map fields
+          ~f:(fun f -> (f.S.field_name.L.item, tenv_find f.S.field_type tenv)) in
+      Types.Record { Types.orig = names; fields = sorted_fields; tag = Types.new_tag() }
 ;;
 
 (* Extract name, type & escape information from a fundec::args *)
@@ -183,7 +184,7 @@ let fix_name_ty tenv =
         | None -> opty_ref := Some (tenv_find (L.mkdummy sym) tenv)
       end
     | Types.Array (arrty, _) -> fix arrty
-    | Types.Record (fields, _) ->
+    | Types.Record r -> let fields = r.Types.fields in
       List.iter fields ~f:(fun (_, t) -> fix t)
     | _ -> ()
   in (
@@ -273,18 +274,19 @@ let rec transExp level allow_break venv tenv exp =
             let sorted_fl = List.sort ~cmp:field_loc_cmp fl in
             let recty = tenv_find sl tenv in begin
             match recty with
-            | Types.Record (fields, _) -> begin
-                List.iter2_exn fields sorted_fl
-                  ~f:(fun (fname, ftyp) (name, body) ->
-                      if Symbol.equal fname name.L.item then
-                        let _ = check_ty ftyp body in () (* TODO FIXME *)
-                      else
-                        name_error name.L.loc
-                        @@ sprintf "Wrong field %s: expected %s"
-                          (Symbol.name name.L.item) (Symbol.name fname))
-              end
-            | _ -> type_error sl.L.loc @@
-              sprintf "%s is not of Record type" (Symbol.name sl.L.item)
+              | Types.Record r -> begin
+                  let fields = r.Types.fields in
+                  List.iter2_exn fields sorted_fl
+                    ~f:(fun (fname, ftyp) (name, body) ->
+                        if Symbol.equal fname name.L.item then
+                          let _ = check_ty ftyp body in () (* TODO FIXME *)
+                        else
+                          name_error name.L.loc
+                          @@ sprintf "Wrong field %s: expected %s"
+                            (Symbol.name name.L.item) (Symbol.name fname))
+                end
+              | _ -> type_error sl.L.loc @@
+                sprintf "%s is not of Record type" (Symbol.name sl.L.item)
           end; lift_ty recty
           )
         | S.Array (sl, sizel, initl) -> (
@@ -380,15 +382,16 @@ let rec transExp level allow_break venv tenv exp =
     | S.FieldAccess (vl, sl) -> (
         let ty = (fst @@ trLValue vl).ty in
         match ty with
-            | Types.Record (fields, _) -> (
-                try lift_ty (List.Assoc.find_exn fields sl.L.item), true
-                with Not_found -> name_error sl.L.loc @@
-                                    sprintf "Unknown field %s for record %s"
-                                    (Symbol.name sl.L.item) (Types.to_string ty)
-            )
-            | _ -> type_error vl.L.loc @@
-                    sprintf "%s is not of Record type" (Types.to_string ty)
-        )
+        | Types.Record r -> (
+            let fields = r.Types.fields in
+            try lift_ty (List.Assoc.find_exn fields sl.L.item), true
+            with Not_found -> name_error sl.L.loc @@
+              sprintf "Unknown field %s for record %s"
+                (Symbol.name sl.L.item) (Types.to_string ty)
+          )
+        | _ -> type_error vl.L.loc @@
+          sprintf "%s is not of Record type" (Types.to_string ty)
+      )
     | S.ArrayAccess (vl, el) -> (
         let arr_exp = fst @@ trLValue vl in
         let ty = arr_exp.ty in

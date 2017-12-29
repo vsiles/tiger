@@ -26,6 +26,9 @@ module type Translate =
       val simpleVar: access -> level -> exp
       val arrayAccess: exp -> exp -> exp
       val fieldAccess: exp -> Symbol.t -> Symbol.t list -> exp
+      val intConst: int -> exp
+      val binOperation : Syntax.op -> exp -> exp -> exp
+      val nil: exp
 
       val placeholder: exp
 
@@ -192,4 +195,32 @@ module Make (F: Frame.Frame) : Translate = struct
     and tbase = unEx base in
     Ex (T.MEM (base_n_offset_builder tbase pos (T.CONST (F.wordSize))))
   ;;
+
+  let intConst n = Ex (T.CONST n);;
+
+  type op_info = BinOp of T.binop | RelOp of T.relop
+
+  let op_of_op = function
+    | Syntax.Plus -> BinOp T.PLUS
+    | Syntax.Minus -> BinOp T.MINUS
+    | Syntax.Times -> BinOp T.MUL
+    | Syntax.Div -> BinOp T.DIV
+    | Syntax.Eq -> RelOp T.EQ
+    | Syntax.Neq -> RelOp T.NE
+    | Syntax.Lt -> RelOp T.LT
+    | Syntax.Le -> RelOp T.LE
+    | Syntax.Gt -> RelOp T.GT
+    | Syntax.Ge -> RelOp T.GE
+  ;;
+
+  let binOperation op lexp rexp =
+    let left_exp = unEx lexp
+    and right_exp = unEx rexp in
+    match op_of_op op with
+    | BinOp op -> Ex (T.BINOP (op, left_exp, right_exp))
+    | RelOp op -> Cx (fun t f ->
+        T.CJUMP (op, left_exp, right_exp, t, f))
+  ;;
+
+  let nil = Ex (T.CONST 0);;
 end

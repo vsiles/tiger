@@ -13,6 +13,9 @@ module type Translate =
       val simpleVar: access -> level -> exp
       val arrayAccess: exp -> exp -> exp
       val fieldAccess: exp -> Symbol.t -> Symbol.t list -> exp
+      val intConst: int -> exp
+      val binOperation : Syntax.op -> exp -> exp -> exp
+      val nil: exp
 
       val placeholder: exp
 

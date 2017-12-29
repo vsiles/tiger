@@ -193,6 +193,14 @@ let fix_name_ty tenv =
   )
 ;;
 
+let check_eq loc expty =
+  match expty.ty with
+  | Types.Record _ -> { exp = expty.exp; ty = Types.Int } (* bool is Types.Int *)
+  | _ -> type_error loc @@ sprintf
+      "Equality test between 'nil' and non record expression (of type %s)"
+      (Types.to_string expty.ty)
+;;
+
 (* TODO improve error message here,
    might remove some calls to check_* to have more precise log *)
 (* transExp: Translate.level -> bool -> venv -> tenv -> S.exp -> expty *)
@@ -211,161 +219,156 @@ let rec transExp level allow_break venv tenv exp =
     and check_int exp = check_ty Types.Int exp
 
     and trExp exp = match exp.L.item with
-        | S.Lvalue vl -> fst @@ trLValue vl
-        | S.Nil _ -> lift_ty Types.Nil
+      | S.Lvalue vl -> fst @@ trLValue vl
+      | S.Nil _ -> { exp = T.nil; ty = Types.Nil }
         (*
             - type of a sequence is the type of the last entry.
             - all entries must typecheck
             - if any entry but the last is of non unit type,
               its value will be discarded
         *)
-        | S.Seq ell -> List.fold_left ell
-                         ~f:(fun _ el -> trExp el)
-                         ~init:(lift_ty Types.Unit)
-        | S.Int _ -> lift_ty Types.Int
-        | S.String _ -> lift_ty Types.String
-        | S.FunCall (sl, ell) -> (
-            let (argsty, retty) = (match fenv_find sl venv with
-                | E.FunEntry (_, _, tylist, ty) -> (tylist, ty)
-                | E.VarEntry _ ->
-                  type_error sl.L.loc @@
-                  sprintf "%s is a variable, expected a function"
-                    (Symbol.name sl.L.item)
-              ) in (List.iter2_exn argsty ell
-                      (* TODO FIXME *) (fun x y -> let _ = check_ty x y in ()); lift_ty retty)
-        )
-        | S.BinOp (el1, opl, el2) -> (
-            let expty1 = trExp el1 in
-            let expty2 = trExp el2 in
-            match opl.L.item with
-            | S.Eq | S.Neq -> begin
-                (* first, check for nil vs nil *)
-                match el1.L.item, el2.L.item with
-                | S.Nil _, S.Nil _ ->
-                  type_error exp.L.loc
-                    "Spotted equality test between two untyped 'nil', which is forbidden"
-                | _, S.Nil _ -> (match expty1.ty with
-                    | Types.Record _ -> lift_ty Types.Int (* bool is Types.Int *)
-                    | _ -> type_error exp.L.loc @@ sprintf
-                        "Equality test between 'nil' and non record expression (of type %s)"
-                        (Types.to_string expty1.ty)
-                  )
-                | S.Nil _, _ -> (match expty2.ty with
-                    | Types.Record _ -> lift_ty Types.Int (* bool is Types.Int *)
-                    | _ -> type_error exp.L.loc @@ sprintf
-                        "Equality test between 'nil' and non record expression (of type %s)"
-                        (Types.to_string expty2.ty)
-                  )
-                | _, _ -> if (not (Types.eq_compat expty1.ty expty2.ty)) ||
-                             (not (Types.compat expty1.ty expty2.ty)) then
-                    type_error exp.L.loc @@ sprintf
-                      "Ill-typed equality test: %s vs %s"
-                      (Types.to_string expty1.ty) (Types.to_string expty2.ty)
-                  else lift_ty Types.Int
-              end
-            | _ -> (
-                (* TODO check_int *)
-                let _ = check_int el1 in
-                let _ =  check_int el2 in
-                lift_ty Types.Int)
-          )
-        | S.Record (sl, fl) -> (
-            (* sort field def to easily compare with sorted Record def *)
-            let sorted_fl = List.sort ~cmp:field_loc_cmp fl in
-            let recty = tenv_find sl tenv in begin
-            match recty with
-              | Types.Record r -> begin
-                  let fields = r.Types.fields in
-                  List.iter2_exn fields sorted_fl
-                    ~f:(fun (fname, ftyp) (name, body) ->
-                        if Symbol.equal fname name.L.item then
-                          let _ = check_ty ftyp body in () (* TODO FIXME *)
-                        else
-                          name_error name.L.loc
-                          @@ sprintf "Wrong field %s: expected %s"
-                            (Symbol.name name.L.item) (Symbol.name fname))
-                end
-              | _ -> type_error sl.L.loc @@
-                sprintf "%s is not of Record type" (Symbol.name sl.L.item)
-          end; lift_ty recty
-          )
-        | S.Array (sl, sizel, initl) -> (
-            (* TODO check_int *)
-            let _ = check_int sizel in
-            let init_tyexp = trExp initl in
-            let arrty = tenv_find sl tenv in
-            begin match arrty with
-              | Types.Array (ty, _) ->
-                if Types.compat init_tyexp.ty ty then lift_ty arrty
-                else
-                  type_error initl.L.loc @@
-                  sprintf
-                    "Wrong type for initial value of an array: found %s, expected %s"
-                    (Types.to_string init_tyexp.ty) (Types.to_string ty)
-              | _ ->
+      | S.Seq ell -> List.fold_left ell
+                       ~f:(fun _ el -> trExp el)
+                       ~init:(lift_ty Types.Unit)
+      | S.Int n -> { exp = T.intConst n.L.item; ty = Types.Int }
+      | S.String _ -> lift_ty Types.String
+      | S.FunCall (sl, ell) -> (
+          let (argsty, retty) = (match fenv_find sl venv with
+              | E.FunEntry (_, _, tylist, ty) -> (tylist, ty)
+              | E.VarEntry _ ->
                 type_error sl.L.loc @@
-                sprintf "Not an array type: %s" (Types.to_string arrty)
+                sprintf "%s is a variable, expected a function"
+                  (Symbol.name sl.L.item)
+            ) in (List.iter2_exn argsty ell
+                    (* TODO FIXME *) (fun x y -> let _ = check_ty x y in ()); lift_ty retty)
+        )
+      | S.BinOp (el1, opl, el2) -> (
+          (* TODO improve comparaison support with string comparison *)
+          match opl.L.item with
+          | S.Eq | S.Neq -> begin
+              let expty1 = trExp el1 in
+              let expty2 = trExp el2 in
+              (* first, check for nil vs nil *)
+              match el1.L.item, el2.L.item with
+              | S.Nil _, S.Nil _ ->
+                type_error exp.L.loc
+                  "Spotted equality test between two untyped 'nil', which is forbidden"
+              | _, S.Nil _ -> check_eq exp.L.loc expty1
+              | S.Nil _, _ -> check_eq exp.L.loc expty2
+              | _, _ -> if (not (Types.eq_compat expty1.ty expty2.ty)) ||
+                           (not (Types.compat expty1.ty expty2.ty)) then
+                  type_error exp.L.loc @@ sprintf
+                    "Ill-typed equality test: %s vs %s"
+                    (Types.to_string expty1.ty) (Types.to_string expty2.ty)
+                else { exp = T.binOperation opl.L.item expty1.exp expty2.exp;
+                       ty = Types.Int
+                     }
             end
-          )
-        | S.If (testl, thenl, oelsel) -> (
-            let thentyexp = trExp thenl in
-            (* TODO check_int *)
-            let _ = check_int testl in
-            begin match oelsel with
-                | None -> ()
-                | Some elsel -> ((* TODO FIXME *)
-                    let _ = check_ty thentyexp.ty elsel in ()
-                  )
-            end; thentyexp
+          | _ -> (
+              let expty1 = check_int el1
+              and expty2 = check_int el2 in
+              { exp = T.binOperation opl.L.item expty1.exp expty2.exp;
+                ty = Types.Int
+              }
+            )
         )
-        | S.While (condl, bodyl) -> (
-            (* TODO check_int *)
-            let _ = check_int condl in
-            let ty = (transExp level true venv tenv bodyl).ty in
-            if not @@ Types.compat ty Types.Unit
-            then type_error exp.L.loc @@
-              sprintf "The body of a While loop must be of Unit type, found %s"
-                (Types.to_string ty)
-            else lift_ty Types.Unit
+      | S.Record (sl, fl) -> (
+          (* sort field def to easily compare with sorted Record def *)
+          let sorted_fl = List.sort ~cmp:field_loc_cmp fl in
+          let recty = tenv_find sl tenv in begin
+            match recty with
+            | Types.Record r -> begin
+                let fields = r.Types.fields in
+                List.iter2_exn fields sorted_fl
+                  ~f:(fun (fname, ftyp) (name, body) ->
+                      if Symbol.equal fname name.L.item then
+                        let _ = check_ty ftyp body in () (* TODO FIXME *)
+                      else
+                        name_error name.L.loc
+                        @@ sprintf "Wrong field %s: expected %s"
+                          (Symbol.name name.L.item) (Symbol.name fname))
+              end
+            | _ -> type_error sl.L.loc @@
+              sprintf "%s is not of Record type" (Symbol.name sl.L.item)
+          end; lift_ty recty
         )
-        | S.For (sym, escp, froml, tol, bodyl) -> (
-            (* adding the index to venv, as 'RO' so we can't assign it in the source *)
-            let access = T.allocLocal level !escp in
-(*            let _ = printf "Adding loop index %s" (Symbol.name sym) in *)
-            let venv' = Symbol.Table.add venv ~key:sym
-                ~data:(E.VarEntry (access, Types.Int, false))  in
-            let ty = (transExp level true venv' tenv bodyl).ty in
-            if not @@ Types.compat ty Types.Unit
-            then type_error exp.L.loc @@
-                sprintf "The body of a For loop must be of Unit type, found %s"
-                (Types.to_string ty)
-                (* TODO check_int *)
-            else begin
-              let _ = check_int froml in
-              let _ = check_int tol in
-              lift_ty Types.Unit
-            end
-          )
-        | S.Break _ -> if allow_break then lift_ty Types.Unit
-          else type_error exp.L.loc "Found 'break' instruction outside of For/While loop"
-        | S.Assign (vl, el) -> (
-            let ret = lift_ty Types.Unit in
-            let vartyexp, assign = trLValue vl in
-            let varty = vartyexp.ty in
-            if assign then ((* TODO FIXME *)
-              let _ = check_ty varty el in ret)
-            else type_error exp.L.loc @@
-              sprintf "Assigning a RO variable is forbidden (For loop index, function argument)"
+      | S.Array (sl, sizel, initl) -> (
+          (* TODO check_int *)
+          let _ = check_int sizel in
+          let init_tyexp = trExp initl in
+          let arrty = tenv_find sl tenv in
+          begin match arrty with
+            | Types.Array (ty, _) ->
+              if Types.compat init_tyexp.ty ty then lift_ty arrty
+              else
+                type_error initl.L.loc @@
+                sprintf
+                  "Wrong type for initial value of an array: found %s, expected %s"
+                  (Types.to_string init_tyexp.ty) (Types.to_string ty)
+            | _ ->
+              type_error sl.L.loc @@
+              sprintf "Not an array type: %s" (Types.to_string arrty)
+          end
         )
-        | S.Let (decl, el) ->
-(*            let _ = printf "Translating Let block\n" in *)
-(*             let _ = env_pp venv in *)
-            let venv', tenv' = transDecs level venv tenv decl in
-(*            let _ = printf "Translating Let body\n" in *)
-(*            let _ = env_pp venv' in *)
-            let ret = transExp level allow_break venv' tenv' el in
-(*            let _ = printf "Done Translating Let\n" in *)
-            ret
+      | S.If (testl, thenl, oelsel) -> (
+          let thentyexp = trExp thenl in
+          (* TODO check_int *)
+          let _ = check_int testl in
+          begin match oelsel with
+            | None -> ()
+            | Some elsel -> ((* TODO FIXME *)
+                let _ = check_ty thentyexp.ty elsel in ()
+              )
+          end; thentyexp
+        )
+      | S.While (condl, bodyl) -> (
+          (* TODO check_int *)
+          let _ = check_int condl in
+          let ty = (transExp level true venv tenv bodyl).ty in
+          if not @@ Types.compat ty Types.Unit
+          then type_error exp.L.loc @@
+            sprintf "The body of a While loop must be of Unit type, found %s"
+              (Types.to_string ty)
+          else lift_ty Types.Unit
+        )
+      | S.For (sym, escp, froml, tol, bodyl) -> (
+          (* adding the index to venv, as 'RO' so we can't assign it in the source *)
+          let access = T.allocLocal level !escp in
+          (*            let _ = printf "Adding loop index %s" (Symbol.name sym) in *)
+          let venv' = Symbol.Table.add venv ~key:sym
+              ~data:(E.VarEntry (access, Types.Int, false))  in
+          let ty = (transExp level true venv' tenv bodyl).ty in
+          if not @@ Types.compat ty Types.Unit
+          then type_error exp.L.loc @@
+            sprintf "The body of a For loop must be of Unit type, found %s"
+              (Types.to_string ty)
+              (* TODO check_int *)
+          else begin
+            let _ = check_int froml in
+            let _ = check_int tol in
+            lift_ty Types.Unit
+          end
+        )
+      | S.Break _ -> if allow_break then lift_ty Types.Unit
+        else type_error exp.L.loc "Found 'break' instruction outside of For/While loop"
+      | S.Assign (vl, el) -> (
+          let ret = lift_ty Types.Unit in
+          let vartyexp, assign = trLValue vl in
+          let varty = vartyexp.ty in
+          if assign then ((* TODO FIXME *)
+            let _ = check_ty varty el in ret)
+          else type_error exp.L.loc @@
+            sprintf "Assigning a RO variable is forbidden (For loop index, function argument)"
+        )
+      | S.Let (decl, el) ->
+        (*            let _ = printf "Translating Let block\n" in *)
+        (*             let _ = env_pp venv in *)
+        let venv', tenv' = transDecs level venv tenv decl in
+        (*            let _ = printf "Translating Let body\n" in *)
+        (*            let _ = env_pp venv' in *)
+        let ret = transExp level allow_break venv' tenv' el in
+        (*            let _ = printf "Done Translating Let\n" in *)
+        ret
 
     (* trLValue: S.lvalue location -> expty * bool *)
     and trLValue var = match var.L.item with

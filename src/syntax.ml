@@ -41,31 +41,14 @@ let translate_field f = {
   field_type = f.Tig_syntax.field_type;
   };;
 
-type tyRecord = {
-  orig: Symbol.t list;  (* to keep the original ordering, when computing offsets *)
-  sorted: tyfield list; (* to ease comparing two lists *)
-}
-
 type ty =
     | TyName of Symbol.t Location.loc
-    | TyRecord of tyRecord
+    | TyRecord of tyfield list
     | TyArray of Symbol.t Location.loc
-
-let field_cmp field1 field2 =
-  let name1 = field1.field_name in
-  let name2 = field2.field_name in
-  Pervasives.compare
-    (Symbol.name name1.Location.item)
-    (Symbol.name name2.Location.item)
-;;
 
 let translate_ty ty = match ty with
   | Tig_syntax.TyName sl -> TyName sl
-  | Tig_syntax.TyRecord fields ->
-    let names = List.map fields ~f:(fun f -> f.Tig_syntax.field_name.Location.item) in
-    let trfields = List.map fields ~f:translate_field in
-    let sorted_fields = (List.sort ~cmp:field_cmp trfields)
-    in TyRecord { orig = names; sorted = sorted_fields }
+  | Tig_syntax.TyRecord fields -> TyRecord (List.map fields ~f:translate_field)
   | Tig_syntax.TyArray sl -> TyArray sl
 ;;
 

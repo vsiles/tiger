@@ -15,10 +15,11 @@ module type Translate =
       val fieldAccess: exp -> Symbol.t -> Symbol.t list -> exp
       val intConst: int -> exp
       val binOperation : Syntax.op -> exp -> exp -> exp
-      val nil: exp
-      val unit: exp
+      val nilExp: exp
+      val unitExp: exp
       val ifthenelse : exp -> exp -> exp -> exp
-      val string : string -> exp
+      val stringExp : string -> exp
+      val recordExp: exp list -> exp
 
       val placeholder: exp
 

@@ -28,10 +28,11 @@ module type Translate =
       val fieldAccess: exp -> Symbol.t -> Symbol.t list -> exp
       val intConst: int -> exp
       val binOperation : Syntax.op -> exp -> exp -> exp
-      val nil: exp
-      val unit: exp
+      val nilExp: exp
+      val unitExp: exp
       val ifthenelse : exp -> exp -> exp -> exp
-      val string : string -> exp
+      val stringExp : string -> exp
+      val recordExp: exp list -> exp
 
       val placeholder: exp
 
@@ -235,8 +236,8 @@ module Make (F: Frame.Frame) : Translate = struct
         T.CJUMP (op, left_exp, right_exp, t, f))
   ;;
 
-  let nil = Ex (T.CONST 0);;
-  let unit = Nx (T.EXP (T.CONST 0));;
+  let nilExp = Ex (T.CONST 0);;
+  let unitExp = Nx (T.EXP (T.CONST 0));;
 
   let ifthenelse test_exp then_exp else_exp =
     let test = unCx test_exp
@@ -295,10 +296,11 @@ module Make (F: Frame.Frame) : Translate = struct
 
   ;;
 
-  (* String declaration *)
+  (* list of fragments *)
   let frags : F.frag list ref = ref [];;
 
-  let string str =
+  (* String declaration *)
+  let stringExp str =
     let some_label =
       List.find (!frags) (fun f -> match f with
           | F.STRING (lbl, str') -> Pervasives.compare str str' = 0
@@ -306,9 +308,24 @@ module Make (F: Frame.Frame) : Translate = struct
     let label = match some_label with
       | Some (F.STRING (l, _)) -> l
 (*      | Some _ -> failwith "Failure in Translate.string" *)
-      | None -> let l = Temp.newlabel() in
+      | None -> let l = Temp.newlabel () in
         frags := F.STRING (l, str) :: (!frags);
         l
     in Ex (T.NAME label)
+  ;;
+
+  (* Record allocation *)
+  let recordExp inits =
+    let initExp r n exp =
+      let pos = T.BINOP (T.PLUS, r, T.CONST (n * F.wordSize)) in
+      T.MOVE (T.MEM pos, unEx exp)
+    and base = T.TEMP (Temp.newtemp ())
+    and nr = List.length inits in
+    let call_alloc = F.externalCall "allocRecord" [T.CONST (nr * F.wordSize)] in
+    let alloc = T.MOVE (base, call_alloc) in
+    let (s, _) = List.fold_left inits
+        ~init:(alloc, 0) ~f:(fun (acc, i) init ->
+            (T.SEQ (acc, initExp base i init)), i + 1)
+    in Ex (T.ESEQ (s, base))
   ;;
 end

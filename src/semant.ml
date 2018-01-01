@@ -62,20 +62,21 @@ let tenv_find = env_find "type"
 type expty = {exp: T.exp; ty: Types.t}
 
 (*
-    transTy: tenv -> S.ty -> Types.t
+    transTy: L.t tenv -> S.ty -> Types.t
     Must not go under Types.Name in order to be able
     to deal with mutual recursive types
 *)
-let transTy tenv = function
+let transTy loc tenv typ =
+  match typ with
     | S.TyName sl -> tenv_find sl tenv
     | S.TyArray sl -> Types.Array (tenv_find sl tenv, Types.new_tag ())
-    | S.TyRecord fields_info ->
-      let names = fields_info.S.orig
-      and fields = fields_info.S.sorted in
-      let sorted_fields =
-        List.map fields
+    | S.TyRecord fields ->
+      let names = List.map fields ~f:(fun x -> x.S.field_name.L.item) in
+      let _ = if List.contains_dup names ~compare:Symbol.equal then
+          syntax_error loc "Duplicate fields in type declaration" in
+      let trans_fields = List.map fields
           ~f:(fun f -> (f.S.field_name.L.item, tenv_find f.S.field_type tenv)) in
-      Types.Record { Types.orig = names; fields = sorted_fields; tag = Types.new_tag() }
+      Types.Record { Types.fields = trans_fields; Types.tag = Types.new_tag() }
 ;;
 
 (* Extract name, type & escape information from a fundec::args *)
@@ -201,6 +202,26 @@ let check_eq loc expty =
       (Types.to_string expty.ty)
 ;;
 
+(* pre-conditions:
+   - ref list doesn't have dups
+   - inits doesn't have dups
+*)
+let rec reorder_inits loc inits ref = match ref with
+  | (symb, ty) :: tl ->
+    let symbl = L.mkloc symb loc in
+    let oelt = List.Assoc.find
+        inits
+        ~equal:(fun sl1 sl2 -> Symbol.equal sl1.L.item sl2.L.item = 0)
+        symbl
+    in begin match oelt with
+    | None ->
+      name_error loc @@
+      sprintf "Missing field %s initialization" (Symbol.name symb)
+    | Some elt -> (elt, ty) :: reorder_inits loc inits tl
+    end
+  | [] -> []
+;;
+
 (* TODO improve error message here,
    might remove some calls to check_* to have more precise log *)
 (* transExp: Translate.level -> bool -> venv -> tenv -> S.exp -> expty *)
@@ -220,7 +241,7 @@ let rec transExp level allow_break venv tenv exp =
 
     and trExp exp = match exp.L.item with
       | S.Lvalue vl -> fst @@ trLValue vl
-      | S.Nil _ -> { exp = T.nil; ty = Types.Nil }
+      | S.Nil _ -> { exp = T.nilExp; ty = Types.Nil }
         (*
             - type of a sequence is the type of the last entry.
             - all entries must typecheck
@@ -232,7 +253,7 @@ let rec transExp level allow_break venv tenv exp =
                        ~init:(lift_ty Types.Unit)
       | S.Int n -> { exp = T.intConst n.L.item; ty = Types.Int }
       | S.String sl -> {
-          exp = T.string sl.L.item;
+          exp = T.stringExp sl.L.item;
           ty = Types.String
         }
       | S.FunCall (sl, ell) -> (
@@ -276,24 +297,23 @@ let rec transExp level allow_break venv tenv exp =
             )
         )
       | S.Record (sl, fl) -> (
-          (* sort field def to easily compare with sorted Record def *)
-          let sorted_fl = List.sort ~cmp:field_loc_cmp fl in
+          let names = List.map fl ~f:(fun f -> (fst f).L.item) in
+          let _ = if List.contains_dup names ~compare:Symbol.equal then
+              syntax_error sl.L.loc "Duplicate field in Record declaration" in
           let recty = tenv_find sl tenv in begin
             match recty with
             | Types.Record r -> begin
                 let fields = r.Types.fields in
-                List.iter2_exn fields sorted_fl
-                  ~f:(fun (fname, ftyp) (name, body) ->
-                      if Symbol.equal fname name.L.item then
-                        let _ = check_ty ftyp body in () (* TODO FIXME *)
-                      else
-                        name_error name.L.loc
-                        @@ sprintf "Wrong field %s: expected %s"
-                          (Symbol.name name.L.item) (Symbol.name fname))
+                let raw_exps = reorder_inits sl.L.loc fl fields in
+                let exps = List.map raw_exps
+                    ~f:(fun (expr,ty) ->
+                        let expty = check_ty ty expr in expty.exp
+                      )
+                in { exp = T.recordExp exps; ty = recty }
               end
             | _ -> type_error sl.L.loc @@
               sprintf "%s is not of Record type" (Symbol.name sl.L.item)
-          end; lift_ty recty
+          end
         )
       | S.Array (sl, sizel, initl) -> (
           (* TODO check_int *)
@@ -318,7 +338,7 @@ let rec transExp level allow_break venv tenv exp =
           begin match oelsel with
             | None -> (* then then branch my be of type unit *)
               let thenexp = check_ty Types.Unit thenl in
-              { exp = T.ifthenelse testexp.exp thenexp.exp T.unit;
+              { exp = T.ifthenelse testexp.exp thenexp.exp T.unitExp;
                 ty = Types.Unit
               }
             | Some elsel ->
@@ -399,9 +419,9 @@ let rec transExp level allow_break venv tenv exp =
           | Types.Record r -> (
               try
                 let fields = r.Types.fields in
-                let orig = r.Types.orig in
+                let names = List.map fields ~f:fst in
                 let final_ty = List.Assoc.find_exn fields field in
-                { exp = T.fieldAccess struct_exp.exp field orig;
+                { exp = T.fieldAccess struct_exp.exp field names;
                   ty = final_ty }, true
               with Not_found -> name_error sl.L.loc @@
                 sprintf "Unknown field %s for record %s"
@@ -506,10 +526,11 @@ and transDec level venv tenv = function
     venv, fix_name_ty tenv''
 
 and trans_typ tenv ltypdec =
-  let typdec = ltypdec.L.item in
+  let tloc = ltypdec.L.loc
+  and typdec = ltypdec.L.item in
   let type_name = typdec.S.type_name in
   let typ = typdec.S.typ in
-  Symbol.Table.add tenv ~key:type_name.L.item ~data:(transTy tenv typ)
+  Symbol.Table.add tenv ~key:type_name.L.item ~data:(transTy tloc tenv typ)
 
 and trans_fun venv tenv (lfundec, (argsty, retty), name, level) =
 (*  let _ = printf "Translating %s\n" (Symbol.name lfundec.L.item.S.fun_name.L.item) in *)

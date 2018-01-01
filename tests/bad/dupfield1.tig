@@ -1,0 +1,6 @@
+let
+    type good = { x: int, y: int }
+    var bad := good{x = 3, y = 3, x = 4}
+in
+    bad.x
+end

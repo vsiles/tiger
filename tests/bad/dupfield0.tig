@@ -1,0 +1,5 @@
+let
+    type bad = { x: int, y: int, x: string }
+in
+    3
+end

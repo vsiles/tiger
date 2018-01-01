@@ -20,6 +20,7 @@ module type Translate =
       val ifthenelse : exp -> exp -> exp -> exp
       val stringExp : string -> exp
       val recordExp: exp list -> exp
+      val arrayExp: exp -> exp -> exp
 
       val placeholder: exp
 

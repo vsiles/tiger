@@ -45,7 +45,7 @@ debug:
 	@echo " ML $< (byte, debug)" $(ECHO_OUTPUT)
 	$(Q)$(OCB) -tag debug tigercc.byte
 
-test:
+test: debug
 	@echo "  TESTING " $(ECHO_OUTPUT)
 	$(Q)$(OCB) -package oUnit -tag debug -I tests runtest.byte
 	$(Q)./runtest.byte

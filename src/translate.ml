@@ -33,6 +33,7 @@ module type Translate =
       val ifthenelse : exp -> exp -> exp -> exp
       val stringExp : string -> exp
       val recordExp: exp list -> exp
+      val arrayExp: exp -> exp -> exp
 
       val placeholder: exp
 
@@ -328,4 +329,8 @@ module Make (F: Frame.Frame) : Translate = struct
             (T.SEQ (acc, initExp base i init)), i + 1)
     in Ex (T.ESEQ (s, base))
   ;;
+
+  (* Array allocation *)
+  let arrayExp length init =
+    Ex (F.externalCall "initArray" [unEx length; unEx init])
 end

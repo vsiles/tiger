@@ -316,18 +316,19 @@ let rec transExp level allow_break venv tenv exp =
           end
         )
       | S.Array (sl, sizel, initl) -> (
-          (* TODO check_int *)
-          let _ = check_int sizel in
-          let init_tyexp = trExp initl in
+          let sizeexp = check_int sizel in
+          let initexp = trExp initl in
+          let arrexp = T.arrayExp sizeexp.exp initexp.exp in
           let arrty = tenv_find sl tenv in
           begin match arrty with
             | Types.Array (ty, _) ->
-              if Types.compat init_tyexp.ty ty then lift_ty arrty
+              if Types.compat initexp.ty ty then
+                { exp = arrexp; ty = arrty }
               else
                 type_error initl.L.loc @@
                 sprintf
                   "Wrong type for initial value of an array: found %s, expected %s"
-                  (Types.to_string init_tyexp.ty) (Types.to_string ty)
+                  (Types.to_string initexp.ty) (Types.to_string ty)
             | _ ->
               type_error sl.L.loc @@
               sprintf "Not an array type: %s" (Types.to_string arrty)

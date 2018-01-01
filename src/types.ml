@@ -30,8 +30,7 @@ type t =
     | Unit
     | Name of Symbol.t * t option ref
 and record = {
-  orig: Symbol.t list;          (* original order of the fields name *)
-  fields: (Symbol.t * t) list;  (* sorted fields + types *)
+  fields: (Symbol.t * t) list;  (* fields + types *)
   tag: tag
 }
 

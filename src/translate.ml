@@ -184,7 +184,7 @@ module Make (F: Frame.Frame) : Translate = struct
   let rec lfind_pos x pos = function
     | [] -> None
     | hd :: tl ->
-      if Symbol.equal x hd
+      if Symbol.equal x hd = 0
       then Some pos
       else lfind_pos x (pos + 1) tl
   ;;

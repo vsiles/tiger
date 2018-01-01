@@ -11,7 +11,6 @@ type t =
     | Unit
     | Name of Symbol.t * t option ref
 and record = {
-  orig: Symbol.t list;
   fields: (Symbol.t * t) list;
   tag: tag
 }

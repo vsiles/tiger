@@ -20,7 +20,7 @@ let name (_, s) = s
 ;;
 
 let equal s1 s2 =
-  Pervasives.compare (fst s1) (fst s2) = 0
+  Pervasives.compare (fst s1) (fst s2)
 ;;
 
 module Ord = struct

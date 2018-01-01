@@ -167,7 +167,7 @@ let check_typdec_shadowing ltypdec_list =
         let typdec = ltypdec.L.item in
         let type_name = typdec.S.type_name.L.item in
         if List.exists tl
-          ~f:(fun x -> Symbol.equal type_name x.L.item.S.type_name.L.item)
+          ~f:(fun x -> Symbol.equal type_name x.L.item.S.type_name.L.item = 0)
         then true
         else check_typdec_shadowing_gen tl
       end

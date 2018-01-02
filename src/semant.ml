@@ -339,15 +339,17 @@ let rec transExp level allow_break break_label venv tenv exp =
           end
         end
       | S.While (condl, bodyl) -> (
-          (* TODO check_int *)
-          let _ = check_int condl in
+          let condexp = check_int condl in
           let done_label = Temp.newlabel () in
-          let ty = (transExp level true done_label venv tenv bodyl).ty in
+          let bodyexp = transExp level true done_label venv tenv bodyl in
+          let ty = bodyexp.ty in
           if not @@ Types.compat ty Types.Unit
           then type_error exp.L.loc @@
             sprintf "The body of a While loop must be of Unit type, found %s"
               (Types.to_string ty)
-          else lift_ty Types.Unit
+          else { exp = T.whileExp condexp.exp bodyexp.exp done_label;
+                 ty = Types.Unit
+               }
         )
       | S.For (sym, escp, froml, tol, bodyl) -> (
           (* adding the index to venv, as 'RO' so we can't assign it in the source *)
@@ -368,7 +370,8 @@ let rec transExp level allow_break break_label venv tenv exp =
             lift_ty Types.Unit
           end
         )
-      | S.Break _ -> if allow_break then lift_ty Types.Unit
+      | S.Break _ -> if allow_break then
+          { exp = T.breakExp break_label; ty = Types.Unit }
         else type_error exp.L.loc "Found 'break' instruction outside of For/While loop"
       | S.Assign (vl, el) -> (
           let ret = lift_ty Types.Unit in

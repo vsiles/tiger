@@ -21,6 +21,8 @@ module type Translate =
       val stringExp : string -> exp
       val recordExp: exp list -> exp
       val arrayExp: exp -> exp -> exp
+      val whileExp: exp -> exp -> Temp.label -> exp
+      val breakExp: Temp.label -> exp
 
       val placeholder: exp
 

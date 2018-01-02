@@ -34,6 +34,8 @@ module type Translate =
       val stringExp : string -> exp
       val recordExp: exp list -> exp
       val arrayExp: exp -> exp -> exp
+      val whileExp: exp -> exp -> Temp.label -> exp
+      val breakExp: Temp.label -> exp
 
       val placeholder: exp
 
@@ -333,4 +335,19 @@ module Make (F: Frame.Frame) : Translate = struct
   (* Array allocation *)
   let arrayExp length init =
     Ex (F.externalCall "initArray" [unEx length; unEx init])
+
+  let whileExp condExp bodyExp done_label =
+    let body_label = Temp.newlabel ()
+    and cond_label = Temp.newlabel ()
+    and test = unCx condExp
+    and body = unNx bodyExp in
+    Nx (seq [ T.LABEL cond_label;
+              test body_label done_label;
+              T.LABEL body_label;
+              body;
+              T.JUMP (T.NAME cond_label, [cond_label]);
+              T.LABEL done_label])
+  ;;
+
+  let breakExp done_label = Nx (T.JUMP (T.NAME done_label, [done_label]));;
 end

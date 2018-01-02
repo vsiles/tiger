@@ -100,9 +100,6 @@ let trans_fun_sig tenv lfundec =
   argsty, esclist, retty
 ;;
 
-(* temp function *)
-let lift_ty ty = { exp = T.placeholder; ty = ty };;
-
 (* Check if a list of mutual type declaration has invalid cycles.
    Return true iff there is a cycle
    Assumption: no shadowing/duplicates is allowed, otherwise a situation like
@@ -235,9 +232,12 @@ let rec transExp level allow_break break_label venv tenv exp =
             - if any entry but the last is of non unit type,
               its value will be discarded
         *)
-      | S.Seq ell -> List.fold_left ell
-                       ~f:(fun _ el -> trExp el)
-                       ~init:(lift_ty Types.Unit)
+      | S.Seq ell ->
+        let (exps, ty) =
+          List.fold_left ell
+            ~f:(fun (acc, _) el -> let x = trExp el in (acc @ [x.exp]),  x.ty)
+            ~init:([], Types.Unit) in
+        { exp = T.seqExp exps; ty = ty }
       | S.Int n -> { exp = T.intConst n.L.item; ty = Types.Int }
       | S.String sl -> {
           exp = T.stringExp sl.L.item;
@@ -385,31 +385,26 @@ let rec transExp level allow_break break_label venv tenv exp =
           { exp = T.breakExp break_label; ty = Types.Unit }
         else type_error exp.L.loc "Found 'break' instruction outside of For/While loop"
       | S.Assign (vl, el) -> (
-          let ret = lift_ty Types.Unit in
-          let vartyexp, readonly = trLValue vl in
-          let varty = vartyexp.ty in
+          let varexp, readonly = trLValue vl in
+          let ty = varexp.ty in
           if readonly then
             type_error exp.L.loc @@
             sprintf "Assigning a RO variable is forbidden (For loop index, function argument)"
           else
-            let _ = check_ty varty el in ret
+            let initexp = check_ty ty el in
+            { exp = T.assignExp varexp.exp initexp.exp;
+              ty = Types.Unit
+            }
         )
       | S.Let (decl, el) ->
-        (*            let _ = printf "Translating Let block\n" in *)
-        (*             let _ = env_pp venv in *)
         let venv', tenv' = transDecs level break_label venv tenv decl in
-        (*            let _ = printf "Translating Let body\n" in *)
-        (*            let _ = env_pp venv' in *)
-        let ret = transExp level allow_break break_label venv' tenv' el in
-        (*            let _ = printf "Done Translating Let\n" in *)
-        ret
+        transExp level allow_break break_label venv' tenv' el
 
     (* trLValue: S.lvalue location -> expty * bool *)
     and trLValue var = match var.L.item with
       | S.VarId sl -> begin
           match venv_find sl venv with
           | E.VarEntry (access, ty, readonly) ->
-            (* printf "\nProcessing %s\n" (Symbol.name sl.L.item); *)
             { exp = T.simpleVar access level; ty = ty}, readonly
           | E.FunEntry _ ->
             type_error sl.L.loc @@
@@ -480,7 +475,6 @@ and transDec level break_label venv tenv = function
             | _ -> ()
         end
       end;
-(*      let _ = printf "Adding new let variable %s\n" (Symbol.name var.S.var_name.L.item) in *)
       Symbol.Table.add venv
         ~key:var.S.var_name.L.item
         ~data:(E.VarEntry (access, tyexp.ty, readonly)), tenv
@@ -492,7 +486,6 @@ and transDec level break_label venv tenv = function
         funlist
         ~f:(fun lfundec acc ->
             let argsty,esclist,retty = trans_fun_sig tenv lfundec in
-(*            let _ = printf "\nNew function %s" (Symbol.name lfundec.L.item.S.fun_name.L.item) in *)
             let name = Temp.newlabel() in
             let newlvl = T.newLevel ~parent:level ~name ~formals:esclist in
             (lfundec, (argsty, retty), name, newlvl) :: acc)
@@ -540,17 +533,14 @@ and trans_typ tenv ltypdec =
   Symbol.Table.add tenv ~key:type_name.L.item ~data:(transTy tloc tenv typ)
 
 and trans_fun break_label venv tenv (lfundec, (argsty, retty), name, level) =
-(*  let _ = printf "Translating %s\n" (Symbol.name lfundec.L.item.S.fun_name.L.item) in *)
   let fundec = lfundec.L.item in
   let venv' = List.fold_left argsty
       ~f:(fun venv_acc (name, ty, escp) ->
           let access = T.allocLocal level escp in
-(*          let _ = printf "Adding new argument %s\n" (Symbol.name name.L.item) in *)
             Symbol.Table.add venv_acc
               ~key:name.L.item ~data:(E.VarEntry (access, ty, false)))
       ~init:venv in
   let body_tyexp = transExp level false break_label venv' tenv fundec.S.body in
-(*  let _ = printf "Done\n" in  *)
   if not @@ phys_equal body_tyexp.ty retty then
       type_error lfundec.L.loc @@
       sprintf "The body of this function is of type %s, not %s"

@@ -38,6 +38,8 @@ module type Translate =
       val breakExp: Temp.label -> exp
       val forExp: exp -> exp -> exp -> exp -> Temp.label -> exp
       val callExp: Temp.label -> exp list -> level -> level -> exp
+      val assignExp: exp -> exp -> exp
+      val seqExp : exp list -> exp
 
       val placeholder: exp
 
@@ -102,12 +104,6 @@ module Make (F: Frame.Frame) : Translate = struct
   ;;
 
   type access = level * F.access
-(*
-  let pp_access (lvl, _) =
-    let s = match lvl with | Top -> "Top" | Nested l -> Symbol.name @@ F.name l.frame in
-    printf "<%s>\n" s
-  ;;
-*)
 
   let outermost = Top;;
 
@@ -144,11 +140,6 @@ module Make (F: Frame.Frame) : Translate = struct
 
   (* follow up static links to compute the correct offset to access a var *)
   let rec follow_links curr target exp =
-(*    let p1 = 2 * (Obj.magic curr) in *)
-(*    let n1 = match curr with | Top -> "Top" | Nested l -> Symbol.name @@ F.name l.frame in *)
-(*    let p2 = 2 * (Obj.magic target) in *)
-(*    let n2 = match target with | Top -> "Top" | Nested l -> Symbol.name @@ F.name l.frame in *)
-(*    printf "follow_links %s %s (0x%x 0x%x)\n" n1 n2 p1 p2; *)
     match curr with
     | Nested l -> if level_equals curr target then exp
       else begin
@@ -162,11 +153,6 @@ module Make (F: Frame.Frame) : Translate = struct
 
   (* access -> level -> exp *)
   let simpleVar (target, faccess) curr =
-(*    let p1 = 2 * (Obj.magic curr) in *)
-(*    let n1 = match curr with | Top -> "Top" | Nested l -> Symbol.name @@ F.name l.frame in *)
-(*    let p2 = 2 * (Obj.magic target) in *)
-(*    let n2 = match target with | Top -> "Top" | Nested l -> Symbol.name @@ F.name l.frame in *)
-(*    printf "simpleVar %s %s (0x%x 0x%x)\n" n1 n2 p1 p2; *)
     Ex (F.exp faccess (follow_links curr target (T.TEMP F.fp)))
   ;;
 
@@ -384,4 +370,21 @@ module Make (F: Frame.Frame) : Translate = struct
       end
     | Top -> failwith @@ sprintf "Failure in callExp: static link to Top (%s)"  (Symbol.name funlabel)
   ;;
+
+  let assignExp valExp initExp =
+    let lval = unEx valExp
+    and init = unEx initExp in
+    Nx (T.MOVE (lval, init))
+  ;;
+
+  let seqExp sequence =
+    let rec f = function
+      | [] -> failwith "failure in seqExp: []"
+      | seq :: [] -> seq
+      | hd :: tl -> Ex (T.ESEQ (unNx hd, unEx @@ f tl))
+    in match sequence with
+    | [] -> Ex (T.CONST 0) (* optimize empty sequence *)
+    | _ -> f sequence
+  ;;
+
 end

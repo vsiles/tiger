@@ -6,7 +6,6 @@ module S = Semant.Make(T)
 
 let process filename =
   try
-(*    let _ = printf "Executing test %s\n" filename in *)
     let inx = In_channel.create filename in
     let lexbuf = Lexing.from_channel inx in
     let raw_term = Parser.prog Lexer.lexer lexbuf in

@@ -25,6 +25,8 @@ module type Translate =
       val breakExp: Temp.label -> exp
       val forExp: exp -> exp -> exp -> exp -> Temp.label -> exp
       val callExp: Temp.label -> exp list -> level -> level -> exp
+      val assignExp: exp -> exp -> exp
+      val seqExp : exp list -> exp
 
       val placeholder: exp
 

@@ -351,26 +351,27 @@ let rec transExp level allow_break break_label venv tenv exp =
                  ty = Types.Unit
                }
         )
-      | S.For (sym, escp, froml, tol, bodyl) -> (
+      | S.For (sym, escp, froml, tol, bodyl) ->
           (* adding the index to venv, as 'RO' so we can't assign it in the source *)
           let readonly = true
           and access = T.allocLocal level !escp in
-          (*            let _ = printf "Adding loop index %s" (Symbol.name sym) in *)
           let venv' = Symbol.Table.add venv ~key:sym
               ~data:(E.VarEntry (access, Types.Int, readonly))  in
-          (* TODO fix: break label *)
-          let ty = (transExp level true break_label venv' tenv bodyl).ty in
+          let bodyexp = transExp level true break_label venv' tenv bodyl in
+          let ty = bodyexp.ty in
           if not @@ Types.compat ty Types.Unit
           then type_error exp.L.loc @@
             sprintf "The body of a For loop must be of Unit type, found %s"
               (Types.to_string ty)
-              (* TODO check_int *)
           else begin
-            let _ = check_int froml in
-            let _ = check_int tol in
-            lift_ty Types.Unit
+            let fromexp = check_int froml
+            and toexp = check_int tol
+            and break_label = Temp.newlabel ()
+            and varexp = T.simpleVar access level in
+            { exp = T.forExp varexp fromexp.exp toexp.exp bodyexp.exp break_label;
+              ty = Types.Unit
+            }
           end
-        )
       | S.Break _ -> if allow_break then
           { exp = T.breakExp break_label; ty = Types.Unit }
         else type_error exp.L.loc "Found 'break' instruction outside of For/While loop"

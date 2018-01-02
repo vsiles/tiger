@@ -36,6 +36,7 @@ module type Translate =
       val arrayExp: exp -> exp -> exp
       val whileExp: exp -> exp -> Temp.label -> exp
       val breakExp: Temp.label -> exp
+      val forExp: exp -> exp -> exp -> exp -> Temp.label -> exp
 
       val placeholder: exp
 
@@ -350,4 +351,24 @@ module Make (F: Frame.Frame) : Translate = struct
   ;;
 
   let breakExp done_label = Nx (T.JUMP (T.NAME done_label, [done_label]));;
+
+  let forExp varExp lowExp highExp bodyExp done_label =
+    let var = unEx varExp
+    and low = unEx lowExp
+    and high = unEx highExp
+    and body = unNx bodyExp
+    and body_label = Temp.newlabel ()
+    and next_label = Temp.newlabel () in
+    Nx (seq [
+        T.MOVE (var, low);
+        T.CJUMP (T.LE, var, high, body_label, done_label);
+        T.LABEL body_label;
+        body;
+        T.CJUMP (T.LT, var, high, next_label, done_label);
+        T.LABEL next_label;
+        T.MOVE (var, T.BINOP (T.PLUS, var, T.CONST 1));
+        T.JUMP (T.NAME body_label, [body_label]);
+        T.LABEL done_label ])
+  ;;
+
 end

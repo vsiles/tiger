@@ -23,6 +23,7 @@ module type Translate =
       val arrayExp: exp -> exp -> exp
       val whileExp: exp -> exp -> Temp.label -> exp
       val breakExp: Temp.label -> exp
+      val forExp: exp -> exp -> exp -> exp -> Temp.label -> exp
 
       val placeholder: exp
 

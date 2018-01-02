@@ -76,6 +76,8 @@ module ARM32Frame : Frame.Frame =
       ;;
 
 
-      (* big TODO *)
-      let externalCall fun_name args = T.CONST 0;;
+      (* small TODO: basic implem, must check it will be ok  *)
+      let externalCall fun_name args =
+        T.CALL (T.NAME (Temp.namedlabel fun_name), args)
+      ;;
     end

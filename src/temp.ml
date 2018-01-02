@@ -17,7 +17,7 @@ type label = Symbol.t
 let labelfuns =
     let l = ref (-1) in
     ((function () -> incr l; Symbol.mk (sprintf "L%d" (!l))),
-     (function s -> incr l; Symbol.mk (sprintf "Named%d-%s" (!l) s)))
+     (function s -> incr l; Symbol.mk (sprintf "NL%d-%s" (!l) s)))
 ;;
 
 let newlabel = fst labelfuns;;

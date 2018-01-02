@@ -243,16 +243,25 @@ let rec transExp level allow_break break_label venv tenv exp =
           exp = T.stringExp sl.L.item;
           ty = Types.String
         }
-      | S.FunCall (sl, ell) -> (
-          let (argsty, retty) = (match fenv_find sl venv with
-              | E.FunEntry (_, _, tylist, ty) -> (tylist, ty)
+      | S.FunCall (sl, ell) -> begin
+          let (flevel, flabel, argsty, retty) =
+            (match fenv_find sl venv with
+              | E.FunEntry (flevel, flabel, tylist, ty) ->
+                (flevel, flabel, tylist, ty)
               | E.VarEntry _ ->
                 type_error sl.L.loc @@
                 sprintf "%s is a variable, expected a function"
                   (Symbol.name sl.L.item)
-            ) in (List.iter2_exn argsty ell
-                    (* TODO FIXME *) (fun x y -> let _ = check_ty x y in ()); lift_ty retty)
-        )
+            ) in
+          try
+            let trargs = List.map2_exn argsty ell
+                ~f:(fun x y -> (check_ty x y).exp) in
+            { exp = T.callExp flabel trargs level flevel;
+              ty = retty
+            }
+          with Invalid_argument s -> type_error exp.L.loc @@
+            sprintf "Incorrect number of input argument to function %s (%s)" (Symbol.name sl.L.item) s
+        end
       | S.BinOp (el1, opl, el2) -> (
           (* TODO improve comparaison support with string comparison *)
           match opl.L.item with
@@ -379,7 +388,7 @@ let rec transExp level allow_break break_label venv tenv exp =
           let ret = lift_ty Types.Unit in
           let vartyexp, readonly = trLValue vl in
           let varty = vartyexp.ty in
-          if readonly then (* TODO FIXME *)
+          if readonly then
             type_error exp.L.loc @@
             sprintf "Assigning a RO variable is forbidden (For loop index, function argument)"
           else

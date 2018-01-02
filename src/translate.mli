@@ -24,6 +24,7 @@ module type Translate =
       val whileExp: exp -> exp -> Temp.label -> exp
       val breakExp: Temp.label -> exp
       val forExp: exp -> exp -> exp -> exp -> Temp.label -> exp
+      val callExp: Temp.label -> exp list -> level -> level -> exp
 
       val placeholder: exp
 

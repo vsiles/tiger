@@ -37,6 +37,7 @@ module type Translate =
       val whileExp: exp -> exp -> Temp.label -> exp
       val breakExp: Temp.label -> exp
       val forExp: exp -> exp -> exp -> exp -> Temp.label -> exp
+      val callExp: Temp.label -> exp list -> level -> level -> exp
 
       val placeholder: exp
 
@@ -371,4 +372,16 @@ module Make (F: Frame.Frame) : Translate = struct
         T.LABEL done_label ])
   ;;
 
+  let callExp funlabel args currentlevel targetlevel =
+    let nargs = List.map args ~f:unEx in
+    match targetlevel with
+    | Nested l -> begin
+        match l.parent with
+        | Nested _ ->
+          Ex (T.CALL (T.NAME funlabel,
+                      (follow_links currentlevel l.parent (T.TEMP F.fp)) :: nargs))
+        | Top -> Ex (F.externalCall (Symbol.name funlabel) nargs)
+      end
+    | Top -> failwith @@ sprintf "Failure in callExp: static link to Top (%s)"  (Symbol.name funlabel)
+  ;;
 end

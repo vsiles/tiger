@@ -353,10 +353,11 @@ let rec transExp level allow_break break_label venv tenv exp =
         )
       | S.For (sym, escp, froml, tol, bodyl) -> (
           (* adding the index to venv, as 'RO' so we can't assign it in the source *)
-          let access = T.allocLocal level !escp in
+          let readonly = true
+          and access = T.allocLocal level !escp in
           (*            let _ = printf "Adding loop index %s" (Symbol.name sym) in *)
           let venv' = Symbol.Table.add venv ~key:sym
-              ~data:(E.VarEntry (access, Types.Int, false))  in
+              ~data:(E.VarEntry (access, Types.Int, readonly))  in
           (* TODO fix: break label *)
           let ty = (transExp level true break_label venv' tenv bodyl).ty in
           if not @@ Types.compat ty Types.Unit
@@ -375,12 +376,13 @@ let rec transExp level allow_break break_label venv tenv exp =
         else type_error exp.L.loc "Found 'break' instruction outside of For/While loop"
       | S.Assign (vl, el) -> (
           let ret = lift_ty Types.Unit in
-          let vartyexp, assign = trLValue vl in
+          let vartyexp, readonly = trLValue vl in
           let varty = vartyexp.ty in
-          if assign then ((* TODO FIXME *)
-            let _ = check_ty varty el in ret)
-          else type_error exp.L.loc @@
+          if readonly then (* TODO FIXME *)
+            type_error exp.L.loc @@
             sprintf "Assigning a RO variable is forbidden (For loop index, function argument)"
+          else
+            let _ = check_ty varty el in ret
         )
       | S.Let (decl, el) ->
         (*            let _ = printf "Translating Let block\n" in *)
@@ -396,9 +398,9 @@ let rec transExp level allow_break break_label venv tenv exp =
     and trLValue var = match var.L.item with
       | S.VarId sl -> begin
           match venv_find sl venv with
-          | E.VarEntry (access, ty, assign) ->
+          | E.VarEntry (access, ty, readonly) ->
             (* printf "\nProcessing %s\n" (Symbol.name sl.L.item); *)
-            { exp = T.simpleVar access level; ty = ty}, assign
+            { exp = T.simpleVar access level; ty = ty}, readonly
           | E.FunEntry _ ->
             type_error sl.L.loc @@
             sprintf "%s is a function, expected a variable" (Symbol.name sl.L.item)
@@ -415,7 +417,7 @@ let rec transExp level allow_break break_label venv tenv exp =
                 let names = List.map fields ~f:fst in
                 let final_ty = List.Assoc.find_exn fields field in
                 { exp = T.fieldAccess struct_exp.exp field names;
-                  ty = final_ty }, true
+                  ty = final_ty }, false
               with Not_found -> name_error sl.L.loc @@
                 sprintf "Unknown field %s for record %s"
                   (Symbol.name field) (Types.to_string ty)
@@ -431,7 +433,7 @@ let rec transExp level allow_break break_label venv tenv exp =
           | Types.Array (typ, _) -> (
               let ndx = check_int el in
               let texp = T.arrayAccess arr_exp.exp ndx.exp in
-              { exp = texp; ty = typ }, true
+              { exp = texp; ty = typ }, false
             )
           | _ -> type_error vl.L.loc @@
             sprintf "%s is not of Array type" (Types.to_string ty)
@@ -451,6 +453,7 @@ and transDec level break_label venv tenv = function
   | S.VarDec vl -> (
       let var = vl.L.item in
       let escp = var.S.escape in
+      let readonly = var.S.readonly in
       let access = T.allocLocal level !escp in
       let tyexp = transExp level false break_label venv tenv var.S.value in
       begin
@@ -470,7 +473,7 @@ and transDec level break_label venv tenv = function
 (*      let _ = printf "Adding new let variable %s\n" (Symbol.name var.S.var_name.L.item) in *)
       Symbol.Table.add venv
         ~key:var.S.var_name.L.item
-        ~data:(E.VarEntry (access, tyexp.ty, true)), tenv
+        ~data:(E.VarEntry (access, tyexp.ty, readonly)), tenv
     )
   | S.FunDec funlist ->
     (* gather the headers of each function. Also create label & level *)
@@ -534,7 +537,6 @@ and trans_fun break_label venv tenv (lfundec, (argsty, retty), name, level) =
           let access = T.allocLocal level escp in
 (*          let _ = printf "Adding new argument %s\n" (Symbol.name name.L.item) in *)
             Symbol.Table.add venv_acc
-              (* Can't assign variable that are input variable of a function *)
               ~key:name.L.item ~data:(E.VarEntry (access, ty, false)))
       ~init:venv in
   let body_tyexp = transExp level false break_label venv' tenv fundec.S.body in

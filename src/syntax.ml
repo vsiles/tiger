@@ -86,6 +86,7 @@ and fundec = {
 and vardec = {
     var_name: Symbol.t Location.loc;
     escape: bool ref;
+    readonly: bool;
     var_type: Symbol.t Location.loc option;
     value: exp Location.loc;
 }
@@ -161,6 +162,7 @@ and translate_fundec fdec = {
 and translate_vardec vdec = {
     var_name = vdec.Tig_syntax.var_name;
     escape = vdec.Tig_syntax.escape;
+    readonly = false;
     var_type = vdec.Tig_syntax.var_type;
     value = mkloc (translate vdec.Tig_syntax.value.item) vdec.Tig_syntax.value.loc
 }

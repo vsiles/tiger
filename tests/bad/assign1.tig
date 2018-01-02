@@ -1,7 +1,0 @@
-let 
-    function id (x : int) : int = (
-        x := 4;
-        x
-    )
-in id (3)
-end

@@ -103,19 +103,6 @@ let trans_fun_sig tenv lfundec =
 (* temp function *)
 let lift_ty ty = { exp = T.placeholder; ty = ty };;
 
-(* Compare Record fields declaration (annoted by Location)
-   to be used to sort them during type checking
-
-   To be used with (Symbol.t Location.loc * exp Location.loc) list
-*)
-let field_loc_cmp field_def1 field_def2 =
-  let name1 = fst field_def1 in
-  let name2 = fst field_def2 in
-  Pervasives.compare
-    (Symbol.name name1.L.item)
-    (Symbol.name name2.L.item)
-;;
-
 (* Check if a list of mutual type declaration has invalid cycles.
    Return true iff there is a cycle
    Assumption: no shadowing/duplicates is allowed, otherwise a situation like
@@ -226,7 +213,7 @@ let rec reorder_inits loc inits ref = match ref with
    might remove some calls to check_* to have more precise log *)
 (* transExp: Translate.level -> bool -> venv -> tenv -> S.exp -> expty *)
 (* Note: tenv must not have Types.Name(None) entries *)
-let rec transExp level allow_break venv tenv exp =
+let rec transExp level allow_break break_label venv tenv exp =
   let rec check_ty ty exp =
     let texp = trExp exp in
     let ty' = texp.ty in
@@ -354,7 +341,8 @@ let rec transExp level allow_break venv tenv exp =
       | S.While (condl, bodyl) -> (
           (* TODO check_int *)
           let _ = check_int condl in
-          let ty = (transExp level true venv tenv bodyl).ty in
+          let done_label = Temp.newlabel () in
+          let ty = (transExp level true done_label venv tenv bodyl).ty in
           if not @@ Types.compat ty Types.Unit
           then type_error exp.L.loc @@
             sprintf "The body of a While loop must be of Unit type, found %s"
@@ -367,7 +355,8 @@ let rec transExp level allow_break venv tenv exp =
           (*            let _ = printf "Adding loop index %s" (Symbol.name sym) in *)
           let venv' = Symbol.Table.add venv ~key:sym
               ~data:(E.VarEntry (access, Types.Int, false))  in
-          let ty = (transExp level true venv' tenv bodyl).ty in
+          (* TODO fix: break label *)
+          let ty = (transExp level true break_label venv' tenv bodyl).ty in
           if not @@ Types.compat ty Types.Unit
           then type_error exp.L.loc @@
             sprintf "The body of a For loop must be of Unit type, found %s"
@@ -393,10 +382,10 @@ let rec transExp level allow_break venv tenv exp =
       | S.Let (decl, el) ->
         (*            let _ = printf "Translating Let block\n" in *)
         (*             let _ = env_pp venv in *)
-        let venv', tenv' = transDecs level venv tenv decl in
+        let venv', tenv' = transDecs level break_label venv tenv decl in
         (*            let _ = printf "Translating Let body\n" in *)
         (*            let _ = env_pp venv' in *)
-        let ret = transExp level allow_break venv' tenv' el in
+        let ret = transExp level allow_break break_label venv' tenv' el in
         (*            let _ = printf "Done Translating Let\n" in *)
         ret
 
@@ -446,20 +435,21 @@ let rec transExp level allow_break venv tenv exp =
         )
 in trExp exp
 
-(* transDecs: Translate.level -> venv -> tenv -> S.dec list -> (venv * tenv) *)
+(* transDecs: Translate.level -> Temp.label -> venv -> tenv -> S.dec list -> (venv * tenv) *)
 (* Note: tenv must not have Types.Name(None) entries, neither I/O *)
-and transDecs level venv tenv =
-  List.fold_left ~f:(fun (venv', tenv') dec -> transDec level venv' tenv' dec)
+and transDecs level break_label venv tenv =
+  List.fold_left ~f:(fun (venv', tenv') dec ->
+      transDec level break_label venv' tenv' dec)
     ~init:(venv, tenv)
 
-(* transDec: Translate.level -> venv -> tenv -> S.dec -> (venv * tenv) *)
+(* transDec: Translate.level -> -> Temp.label -> venv -> tenv -> S.dec -> (venv * tenv) *)
 (* Note: tenv must not have Types.Name(None) entries, neither I/O *)
-and transDec level venv tenv = function
+and transDec level break_label venv tenv = function
   | S.VarDec vl -> (
       let var = vl.L.item in
       let escp = var.S.escape in
       let access = T.allocLocal level !escp in
-      let tyexp = transExp level false venv tenv var.S.value in
+      let tyexp = transExp level false break_label venv tenv var.S.value in
       begin
         match var.S.var_type with
         | Some sl -> let styp = tenv_find sl tenv in
@@ -502,7 +492,7 @@ and transDec level venv tenv = function
         ~init:venv in
     (* then parse each body with all headers in the environment *)
     List.iter fun_and_header_list
-      ~f:(fun fundec_and_header -> trans_fun venv' tenv fundec_and_header);
+      ~f:(fun fundec_and_header -> trans_fun break_label venv' tenv fundec_and_header);
       venv', tenv
   | S.TypeDec typlist ->
     let dummy_loc = match typlist with | hd :: _ -> hd.L.loc | [] -> L.dummy_loc in
@@ -533,7 +523,7 @@ and trans_typ tenv ltypdec =
   let typ = typdec.S.typ in
   Symbol.Table.add tenv ~key:type_name.L.item ~data:(transTy tloc tenv typ)
 
-and trans_fun venv tenv (lfundec, (argsty, retty), name, level) =
+and trans_fun break_label venv tenv (lfundec, (argsty, retty), name, level) =
 (*  let _ = printf "Translating %s\n" (Symbol.name lfundec.L.item.S.fun_name.L.item) in *)
   let fundec = lfundec.L.item in
   let venv' = List.fold_left argsty
@@ -544,7 +534,7 @@ and trans_fun venv tenv (lfundec, (argsty, retty), name, level) =
               (* Can't assign variable that are input variable of a function *)
               ~key:name.L.item ~data:(E.VarEntry (access, ty, false)))
       ~init:venv in
-  let body_tyexp = transExp level false venv' tenv fundec.S.body in
+  let body_tyexp = transExp level false break_label venv' tenv fundec.S.body in
 (*  let _ = printf "Done\n" in  *)
   if not @@ phys_equal body_tyexp.ty retty then
       type_error lfundec.L.loc @@
@@ -556,10 +546,11 @@ and trans_fun venv tenv (lfundec, (argsty, retty), name, level) =
 let transProg exp =
   let lexp = L.mkdummy exp in
   let venv = Std.init E.base_venv in
+  let dummy_break_label = Temp.newlabel () in
   let mainlvl = T.newLevel
       ~parent:T.outermost
       ~name:(Temp.namedlabel "__main")
       ~formals:[] in
-  let _ = transExp mainlvl false venv E.base_tenv lexp in ()
+  let _ = transExp mainlvl false dummy_break_label venv E.base_tenv lexp in ()
 
 end

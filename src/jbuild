@@ -1,0 +1,10 @@
+(menhir
+ ((flags (--explain --infer))
+  (modules (parser))))
+
+(ocamllex (lexer))
+
+(executable
+    ((name tigercc)
+     (modules_without_implementation (frame))
+     (libraries (core))))

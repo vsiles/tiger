@@ -1,4 +1,4 @@
-open Core.Std
+open Core
 
 module T = Tree
 
@@ -8,7 +8,7 @@ module T = Tree
     end:
     - intergers & bool are passed by copy into the frame
     - string, struct & array are passed by reference: they address
-      is copied into the frame 
+      is copied into the frame
 
     See ARM calling convention for more details. But since everything will
     be 1 word length, I can simply fill r0-r3 and then add on the stack

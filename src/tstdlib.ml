@@ -1,5 +1,5 @@
 (* standard library signature *)
-open Core.Std
+open Core
 
 module type Stdlib = sig
     type t
@@ -66,7 +66,7 @@ module Make (T: Translate.Translate) : (Stdlib with type t := Env.Make(T).entry)
 
     let init env = List.fold_left stdlib_funs
         ~f:(fun acc (fname, fentry) ->
-            Symbol.Table.add acc ~key:(Symbol.mk fname) ~data:fentry)
+            Symbol.Table.set acc ~key:(Symbol.mk fname) ~data:fentry)
         ~init:env
     ;;
     end

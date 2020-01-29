@@ -1,6 +1,5 @@
-open Core.Std
+open Core
 open Errors
-open Types
 
 (* command line spec *)
 let cmdline_spec =
@@ -30,7 +29,7 @@ let process filename =
 ;;
 
 let command =
-    Command.basic
+    Command.basic_spec
     ~summary:"Compiler for the Tiger language"
     ~readme:(fun () -> "TODO")
     cmdline_spec

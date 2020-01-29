@@ -25,6 +25,6 @@ module Make (T: Translate.Translate) :
 
     let base_tenv =
       let tempty = Symbol.Table.empty in
-      let tint = Symbol.Table.add tempty ~key:(Symbol.mk "int") ~data:Types.Int in
-      Symbol.Table.add tint ~key:(Symbol.mk "string") ~data:Types.String
+      let tint = Symbol.Table.set tempty ~key:(Symbol.mk "int") ~data:Types.Int in
+      Symbol.Table.set tint ~key:(Symbol.mk "string") ~data:Types.String
   end

@@ -1,11 +1,11 @@
-open Core.Std
+open Core
 
 module T = Tree
 
 (* never to be called on an empty list *)
 let rec seq = function
   | hd :: tl -> begin match tl with
-      | hd2 :: tl2 -> T.SEQ (hd, seq tl)
+      | _ :: _ -> T.SEQ (hd, seq tl)
       | [] -> hd
         end
   | [] -> failwith "Tree.seq failure"
@@ -115,7 +115,7 @@ module Make (F: Frame.Frame) : Translate = struct
         ret
       end
     | Top -> begin
-        let newframe = F.newFrame name formals in
+        let newframe = F.newFrame ~name ~formals in
         let ret = Nested { parent = parent; frame = newframe; id = ref () } in
 (*        printf "\nnewLevel %s 0x%x\n" (Symbol.name name) (2 * (Obj.magic ret)); *)
         ret
@@ -129,7 +129,7 @@ module Make (F: Frame.Frame) : Translate = struct
         (* check for static link, if present, remove it *)
         match F.formals frame with
         | [] -> [] (* no static link *)
-        | _ :: l -> List.map l (fun acc -> (lvl, acc))
+        | _ :: l -> List.map l ~f:(fun acc -> (lvl, acc))
       end
   ;;
 
@@ -218,6 +218,9 @@ module Make (F: Frame.Frame) : Translate = struct
     | _ -> failwith "stringOperation must only be called on EQ and NE"
   ;;
 
+  (* dirty local suppress warning *)
+  let () = let _ = stringOperation in ()
+
   let binOperation op lexp rexp =
     let left_exp = unEx lexp
     and right_exp = unEx rexp in
@@ -293,8 +296,8 @@ module Make (F: Frame.Frame) : Translate = struct
   (* String declaration *)
   let stringExp str =
     let some_label =
-      List.find (!frags) (fun f -> match f with
-          | F.STRING (lbl, str') -> Pervasives.compare str str' = 0
+      List.find (!frags) ~f:(fun f -> match f with
+          | F.STRING (_lbl, str') -> String.compare str str' = 0
         ) in
     let label = match some_label with
       | Some (F.STRING (l, _)) -> l

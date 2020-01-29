@@ -1,4 +1,4 @@
-open Core.Std
+open Core
 open Errors
 
 (*
@@ -50,14 +50,14 @@ let rec unroll = function
    - take care of type unrolling
    - Do no use physical equality (might be issues with cyclic definition
      but rely on the tag *)
-let rec compat t1 t2 =
+let compat t1 t2 =
   let ut1 = unroll t1 in
   let ut2 = unroll t2 in
   match ut1, ut2 with
   | Record _, Nil
   | Nil, Record _ -> true
-  | Record r1, Record r2 -> Pervasives.compare r1.tag r2.tag = 0
-  | Array (_, tag1), Array (_, tag2) -> Pervasives.compare tag1 tag2 = 0
+  | Record r1, Record r2 -> Int.compare r1.tag r2.tag = 0
+  | Array (_, tag1), Array (_, tag2) -> Int.compare tag1 tag2 = 0
   | Int, Int
   | String, String
   | Nil, Nil

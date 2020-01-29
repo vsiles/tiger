@@ -1,53 +1,11 @@
-# Verbosity levels
-# 0: only warnings and errors are displayed
-# 1: command summary only (default)
-# 2: executed commands are shown
+all:
+	dune build src/tigercc.exe src/tigercc.bc
 
-ifdef V
-    VERBOSE := $(V)
-else
-    VERBOSE := 1
-endif
-
-ifeq "$(VERBOSE)" "0"
-   Q := @
-   ECHO_OUTPUT :=  > /dev/null
-else ifeq "$(VERBOSE)" "1"
-    Q := @
-    ECHO_OUTPUT := 
-else
-    Q :=
-    ECHO_OUTPUT :=
-endif
-
-OCB_FLAGS := -use-ocamlfind -I src
-OCB := ocamlbuild $(OCB_FLAGS)
-
-byte: tiger.byte
-
-all: native byte
-
-native: tiger.native
-
-tiger.native:
-	@echo "  ML $< (native)" $(ECHO_OUTPUT)
-	$(Q)$(OCB) tigercc.native
-
-tiger.byte:
-	@echo "  ML $< (byte)" $(ECHO_OUTPUT)
-	$(Q)$(OCB) tigercc.byte
+test:
+	dune runtest
 
 clean:
-	@echo "  CLEAN " $(ECHO_OUTPUT)
-	$(Q)$(OCB) -clean
+	dune clean
 
-debug:
-	@echo " ML $< (byte, debug)" $(ECHO_OUTPUT)
-	$(Q)$(OCB) -tag debug tigercc.byte
 
-test: debug
-	@echo "  TESTING " $(ECHO_OUTPUT)
-	$(Q)$(OCB) -package oUnit -tag debug -I tests runtest.byte
-	$(Q)./runtest.byte
-
-.PHONY: test clean
+.PHONY: all test clean

@@ -1,5 +1,3 @@
-open Core.Std
-
 type temp
 
 val newtemp: unit -> temp

@@ -1,0 +1,30 @@
+(executable
+  (name runtest)
+  (libraries tiger_core ounit2))
+
+(rule
+    (alias runtest)
+    (deps runtest.exe
+     bad/assign0.tig
+     bad/break.tig
+     bad/comp_unit.tig
+     bad/dupfield0.tig
+     bad/dupfield1.tig
+     bad/first_order.tig
+     bad/ifthenelse0.tig
+     bad/mutual0.tig
+     bad/shadowing0.tig
+     bad/typcheck0.tig
+     bad/typcheck1.tig
+     bad/typcheck2.tig
+     bad/typcheck3.tig
+     bad/typcheck4.tig
+     bad/typcheck5.tig
+
+     good/assign0.tig
+     good/escapes.tig
+     good/merge.tig
+     good/mutual.tig
+     good/queens.tig
+     good/typcheck0.tig)
+    (action (run ./runtest.exe)))

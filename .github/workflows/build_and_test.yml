@@ -3,11 +3,20 @@ name: build_and_test
 on: [push, pull_request]
 
 jobs:
-  build:
-
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@master
-    - name: Run a one-line script
-      run: echo Hello, world!
+   run:
+     name: Build
+     runs-on: ${{ matrix.operating-system }}
+     strategy:
+       matrix:
+         operating-system: [macos-latest, ubuntu-latest]
+         ocaml-version: ['4.08.0', '4.08.1']
+     steps:
+     - uses: actions/checkout@master
+     - uses: avsm/setup-ocaml@master
+       with:
+         ocaml-version: ${{ matrix.ocaml-version }}
+     - run: opam pin add tiger.dev -n .
+     - run: opam depext -yt tiger
+     - run: opam install -t . --deps-only
+     - run: opam exe -- dune build src/tigercc.exe
+     - run: opam exe -- dune runtest

@@ -1,4 +1,4 @@
-open Core.Std
+open Core
 open Errors
 
 module L = Location
@@ -12,10 +12,10 @@ end
 module Make (T: Translate.Translate) : Semant = struct
 
 module E = Env.Make(T)
-module Std = Stdlib.Make(T)
+module Std = Tstdlib.Make(T)
 
-type venv = E.entry Symbol.Table.t
-type tenv = Types.t Symbol.Table.t
+type _venv = E.entry Symbol.Table.t
+type _tenv = Types.t Symbol.Table.t
 
 let env_find env_name sym env =
   match Symbol.Table.find env sym.L.item with
@@ -122,13 +122,13 @@ let check_typdec_cycle ltypdec_list =
             match Symbol.Table.find ufs left with
             | Some uf -> uf, id, ufs
             | None -> let new_uf = UF.create id in
-              new_uf, id + 1, Symbol.Table.add ufs ~key:left ~data:new_uf
+              new_uf, id + 1, Symbol.Table.set ufs ~key:left ~data:new_uf
           in
           let right_id, id, ufs =
             match Symbol.Table.find ufs right with
             | Some uf -> uf, id, ufs
             | None -> let new_uf = UF.create id in
-              new_uf, id + 1, Symbol.Table.add ufs ~key:right ~data:new_uf
+              new_uf, id + 1, Symbol.Table.set ufs ~key:right ~data:new_uf
           in
           if UF.same_class left_id right_id then
             (* Spotted a cycle *) true
@@ -136,7 +136,7 @@ let check_typdec_cycle ltypdec_list =
             UF.union left_id right_id;
             check_typdec_cycle_gen id ufs tl
           )
-        | _ -> let ufs = Symbol.Table.add ufs ~key:left ~data:(UF.create id) in
+        | _ -> let ufs = Symbol.Table.set ufs ~key:left ~data:(UF.create id) in
           check_typdec_cycle_gen (id + 1) ufs tl
       end
     | [] -> false
@@ -173,7 +173,7 @@ let fix_name_ty tenv =
       List.iter fields ~f:(fun (_, t) -> fix t)
     | _ -> ()
   in (
-    Symbol.Table.iteri tenv (fun ~key ~data -> fix data);
+    Symbol.Table.iteri tenv ~f:(fun ~key:_ ~data -> fix data);
     tenv
   )
 ;;
@@ -364,7 +364,7 @@ let rec transExp level allow_break break_label venv tenv exp =
           (* adding the index to venv, as 'RO' so we can't assign it in the source *)
           let readonly = true
           and access = T.allocLocal level !escp in
-          let venv' = Symbol.Table.add venv ~key:sym
+          let venv' = Symbol.Table.set venv ~key:sym
               ~data:(E.VarEntry (access, Types.Int, readonly))  in
           let bodyexp = transExp level true break_label venv' tenv bodyl in
           let ty = bodyexp.ty in
@@ -420,10 +420,12 @@ let rec transExp level allow_break break_label venv tenv exp =
               try
                 let fields = r.Types.fields in
                 let names = List.map fields ~f:fst in
-                let final_ty = List.Assoc.find_exn fields field in
+                let final_ty =
+                  List.Assoc.find_exn ~equal:(fun x y -> Symbol.equal x y = 0)
+                    fields field in
                 { exp = T.fieldAccess struct_exp.exp field names;
                   ty = final_ty }, false
-              with Not_found -> name_error sl.L.loc @@
+              with Caml.Not_found -> name_error sl.L.loc @@
                 sprintf "Unknown field %s for record %s"
                   (Symbol.name field) (Types.to_string ty)
             )
@@ -475,7 +477,7 @@ and transDec level break_label venv tenv = function
             | _ -> ()
         end
       end;
-      Symbol.Table.add venv
+      Symbol.Table.set venv
         ~key:var.S.var_name.L.item
         ~data:(E.VarEntry (access, tyexp.ty, readonly)), tenv
     )
@@ -494,8 +496,8 @@ and transDec level break_label venv tenv = function
     let venv' = List.fold_left
         fun_and_header_list
         ~f:(fun acc (lfundec, (argsty, retty), name, newlvl) ->
-            let tylist = List.map argsty (fun (_, x, _) -> x) in
-            Symbol.Table.add acc
+            let tylist = List.map argsty ~f:(fun (_, x, _) -> x) in
+            Symbol.Table.set acc
               ~key:lfundec.L.item.S.fun_name.L.item
               ~data:(E.FunEntry (newlvl, name, tylist, retty)))
         ~init:venv in
@@ -516,7 +518,7 @@ and transDec level break_label venv tenv = function
         ~f:(fun tenv_acc ltypdec ->
             let typdec = ltypdec.L.item in
             let header = Types.Name (typdec.S.type_name.L.item, ref None) in
-            Symbol.Table.add tenv_acc ~key:typdec.S.type_name.L.item ~data:header)
+            Symbol.Table.set tenv_acc ~key:typdec.S.type_name.L.item ~data:header)
         ~init:tenv in
     (* the parse each type with all headers in the environment *)
     let tenv'' = List.fold_left typlist
@@ -530,14 +532,14 @@ and trans_typ tenv ltypdec =
   and typdec = ltypdec.L.item in
   let type_name = typdec.S.type_name in
   let typ = typdec.S.typ in
-  Symbol.Table.add tenv ~key:type_name.L.item ~data:(transTy tloc tenv typ)
+  Symbol.Table.set tenv ~key:type_name.L.item ~data:(transTy tloc tenv typ)
 
-and trans_fun break_label venv tenv (lfundec, (argsty, retty), name, level) =
+and trans_fun break_label venv tenv (lfundec, (argsty, retty), _name, level) =
   let fundec = lfundec.L.item in
   let venv' = List.fold_left argsty
       ~f:(fun venv_acc (name, ty, escp) ->
           let access = T.allocLocal level escp in
-            Symbol.Table.add venv_acc
+            Symbol.Table.set venv_acc
               ~key:name.L.item ~data:(E.VarEntry (access, ty, false)))
       ~init:venv in
   let body_tyexp = transExp level false break_label venv' tenv fundec.S.body in

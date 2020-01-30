@@ -1,4 +1,4 @@
-open Core.Std
+open Core
 
 type t = int * string
 
@@ -10,7 +10,7 @@ let mk =
     | Some x -> x, name
     | None -> (
         incr n;
-        match Hashtbl.add table name !n with
+        match Hashtbl.add table ~key:name ~data:!n with
         | `Duplicate -> failwith "Must not happend since .find failed"
         | `Ok -> !n, name
       )
@@ -20,14 +20,14 @@ let name (_, s) = s
 ;;
 
 let equal s1 s2 =
-  Pervasives.compare (fst s1) (fst s2)
+  Int.compare (fst s1) (fst s2)
 ;;
 
 module Ord = struct
   type symbol = t
   type t = symbol
 
-  let compare (x0, _) (x1, _) = Pervasives.compare x0 x1
+  let compare = equal
 
   let t_of_sexp tuple = Tuple2.t_of_sexp Int.t_of_sexp String.t_of_sexp tuple
   let sexp_of_t tuple = Tuple2.sexp_of_t Int.sexp_of_t String.sexp_of_t tuple

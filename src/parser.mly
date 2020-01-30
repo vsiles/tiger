@@ -1,6 +1,5 @@
 %{
-  open Lexing
-  module S = Tig_syntax 
+  module S = Tig_syntax
   module L = Location
 %}
 

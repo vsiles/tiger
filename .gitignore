@@ -7,17 +7,10 @@
 *.cmx
 *.cmxs
 *.cmxa
+.merlin
 
-# ocamlbuild working directory
+# dune working directory
 _build/
-
-# ocamlbuild targets
-*.byte
-*.native
-
-# oasis generated files
-setup.data
-setup.log
 
 # vim temp file
 *.swp

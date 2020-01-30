@@ -1,0 +1,18 @@
+(menhir
+  (modules parser)
+  (flags --explain))
+
+(ocamllex lexer)
+
+(library
+    (name tiger_core)
+    (modules (:standard \ tigercc))
+    (modules_without_implementation frame)
+    (wrapped false)
+    (libraries core))
+
+(executable
+  (name tigercc)
+  (modes byte exe)
+  (modules tigercc)
+  (libraries tiger_core))

@@ -2,7 +2,7 @@
   open Lexing
   open Parser
   open Errors
-  open Core.Std
+  open Core
 
   let special_char = function
     | 'n' -> '\n'

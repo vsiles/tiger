@@ -1,4 +1,4 @@
-open Core.Std
+open Core
 open OUnit2
 
 module T = Translate.Make(Arm32frame.ARM32Frame)
@@ -14,8 +14,8 @@ let process filename =
     In_channel.close inx;
     0
   with
-  | Errors.TError (e, l, m) -> -1
-  | Sys_error s -> -2
+  | Errors.TError (_e, _l, _m) -> -1
+  | Sys_error _s -> -2
 ;;
 
 let printer n =
@@ -25,15 +25,15 @@ let printer n =
   else "Unknown Error"
 ;;
 
-let test_good filename test_ctxt =
-  assert_equal ~printer 0 (process @@ sprintf "./tests/good/%s" filename)
+let test_good filename _test_ctxt =
+  assert_equal ~printer 0 (process @@ sprintf "./good/%s" filename)
 ;;
 
-let test_bad filename test_ctxt =
-  assert_equal ~printer (-1) (process @@ sprintf "./tests/bad/%s" filename)
+let test_bad filename _test_ctxt =
+  assert_equal ~printer (-1) (process @@ sprintf "./bad/%s" filename)
 ;;
 (*
-let test_queens test_ctxt = test_good test_ctxt "tests/good/queens.tig";;
+let test_queens test_ctxt = test_good test_ctxt "good/queens.tig";;
 
 let suite =
     "suite">:::
@@ -44,8 +44,8 @@ let suite =
 let filter_tig name = Filename.check_suffix name ".tig";;
 
 let () =
-    let good_tests = Array.to_list (Sys.readdir "./tests/good/") in
-    let bad_tests = Array.to_list (Sys.readdir "./tests/bad/") in
+    let good_tests = Array.to_list (Sys.readdir "./good/") in
+    let bad_tests = Array.to_list (Sys.readdir "./bad/") in
     let good_tigs = List.filter good_tests ~f:filter_tig in
     let bad_tigs = List.filter bad_tests ~f:filter_tig in
     let tests1 = List.fold_left

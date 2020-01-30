@@ -1,6 +1,6 @@
 open Errors
 open Location
-open Core.Std
+open Core
 
 type op =
     | Plus
@@ -170,5 +170,5 @@ and translate_vardec vdec = {
 and translate_dec = function
     | Tig_syntax.FunDec fll -> FunDec (List.map fll ~f:(fun fl -> mkloc (translate_fundec fl.item) fl.loc))
     | Tig_syntax.VarDec vl -> VarDec (mkloc (translate_vardec vl.item) vl.loc)
-    | Tig_syntax.TypeDec tll -> TypeDec (List.map tll (fun tl -> mkloc (translate_tydec tl.item) tl.loc))
+    | Tig_syntax.TypeDec tll -> TypeDec (List.map tll ~f:(fun tl -> mkloc (translate_tydec tl.item) tl.loc))
 ;;

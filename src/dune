@@ -13,6 +13,8 @@
 
 (executable
   (name tigercc)
+  (package tiger)
+  (public_name tigercc)
   (modes byte exe)
   (modules tigercc)
   (libraries tiger_core))
